@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: StoreManagement
+  mvc:
+    log-request-details: true
+  datasource:
+    url: jdbc:sqlserver://localhost:1433;databaseName=Store_Management;encrypt=true;trustServerCertificate=true
+    username: sa
+    password: 123456
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+server:
+  port: 15679
+  error:
+    include-message: always
+
+logging:
+  charset:
+    console: UTF-8
+  level:
+    com.joao.storemanagement: debug
+    org.springframework.web: debug
+    org.springframework.jdbc: debug
+    com.baomidou.mybatisplus: debug
+
+store:
+  security:
+    datasource-config-key: ${DATASOURCE_CONFIG_KEY:store-management-local-key}
+  invoice:
+    default-tax-rate: 23
+  archive:
+    max-name-suffix-attempts: 1000
+  upload:
+    attachment-dir: uploads/import-attachments
+    invoice-archive-dir: uploads/invoice-archives
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
