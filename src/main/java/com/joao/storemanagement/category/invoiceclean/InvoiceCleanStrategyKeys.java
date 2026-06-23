@@ -16,6 +16,10 @@ public final class InvoiceCleanStrategyKeys {
     public static final String JINDONG = "金东";
     public static final String AIGUOZHE = "爱国者";
     public static final String OUDA = "欧达";
+    public static final String BAIKE = "百客";
+    public static final String CHENGXIN = "诚信";
+    public static final String JUXIN = "聚新";
+    public static final String OUYA = "欧亚";
 
     private InvoiceCleanStrategyKeys() {
     }

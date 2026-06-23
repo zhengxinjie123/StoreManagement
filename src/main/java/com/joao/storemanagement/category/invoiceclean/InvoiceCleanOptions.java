@@ -15,10 +15,6 @@ public class InvoiceCleanOptions {
     @Builder.Default
     private final boolean splitMixedChineseForeignName = false;
 
-    /** 配置了税率列时仅读列值，不使用模板默认税率 */
-    @Builder.Default
-    private final boolean taxRateFromColumnOnly = true;
-
     /** 价格/金额列带货币单位（如 EUR）时，提取数值部分 */
     @Builder.Default
     private final boolean stripCurrencyFromPrice = false;
@@ -27,9 +23,11 @@ public class InvoiceCleanOptions {
     @Builder.Default
     private final boolean skipZeroPricePalletRows = false;
 
-    /** 扫描整行出现 Subtotal 标签时停止解析（飞跃等发票小计不在条码列） */
+    /**
+     * 扫描整行出现 Base Incidencia 标签时停止解析
+     */
     @Builder.Default
-    private final boolean breakOnSubtotalRow = false;
+    private final boolean breakOnTaxableBase = false;
 
     /** 发票中的单价是不含税 但是小计是含税时, 小计为含税 */
     @Builder.Default
@@ -43,15 +41,13 @@ public class InvoiceCleanOptions {
     @Builder.Default
     private final FooterSummaryMode footerSummaryMode = FooterSummaryMode.NONE;
 
-    /** 指定列出现 Subtotal 标签时停止（飞跃发票在 C 列标记合计行） */
-    private final String subtotalStopColumn;
-
     public static InvoiceCleanOptions standard() {
         return InvoiceCleanOptions.builder().build();
     }
 
     public static InvoiceCleanOptions chenguang() {
         return InvoiceCleanOptions.builder()
+                .breakOnTaxableBase(true)
                 .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
                 .build();
     }
@@ -64,12 +60,14 @@ public class InvoiceCleanOptions {
 
     public static InvoiceCleanOptions jindong() {
         return InvoiceCleanOptions.builder()
+                .breakOnTaxableBase(true)
                 .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
                 .build();
     }
 
     public static InvoiceCleanOptions ouda() {
         return InvoiceCleanOptions.builder()
+                .breakOnTaxableBase(true)
                 .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
                 .build();
     }
@@ -86,9 +84,16 @@ public class InvoiceCleanOptions {
                 .build();
     }
 
+    public static InvoiceCleanOptions baike() {
+        return InvoiceCleanOptions.builder()
+                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
+                .breakOnTaxableBase(true)
+                .build();
+    }
+
     public static InvoiceCleanOptions feiyue() {
         return InvoiceCleanOptions.builder()
-                .subtotalStopColumn("C")
+                .breakOnTaxableBase(true)
                 .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
                 .build();
     }
@@ -103,9 +108,25 @@ public class InvoiceCleanOptions {
         return InvoiceCleanOptions.builder()
                 .stripCurrencyFromPrice(true)
                 .skipZeroPricePalletRows(true)
-                .taxRateFromColumnOnly(false)
                 .build();
     }
 
 
+    public static InvoiceCleanOptions chengxin() {
+        return InvoiceCleanOptions.builder()
+                .breakOnTaxableBase(true)
+                .build();
+    }
+
+    public static InvoiceCleanOptions juxin() {
+        return InvoiceCleanOptions.builder()
+                .breakOnTaxableBase(true)
+                .build();
+    }
+
+    public static InvoiceCleanOptions ouya() {
+        return InvoiceCleanOptions.builder()
+                .breakOnTaxableBase(true)
+                .build();
+    }
 }

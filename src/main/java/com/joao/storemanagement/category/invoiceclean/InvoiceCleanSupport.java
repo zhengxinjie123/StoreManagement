@@ -1,9 +1,9 @@
 package com.joao.storemanagement.category.invoiceclean;
 
 import cn.hutool.core.util.StrUtil;
-import com.joao.storemanagement.vo.primary.InvoiceCleanSummaryVO;
 import com.joao.storemanagement.entity.primary.InvoiceTemplate;
 import com.joao.storemanagement.utils.ExcelCellReader;
+import com.joao.storemanagement.vo.primary.InvoiceCleanSummaryVO;
 import org.apache.poi.ss.usermodel.Sheet;
 
 import java.math.BigDecimal;
@@ -25,10 +25,6 @@ public final class InvoiceCleanSupport {
     }
 
     public record NameParts(String chinese, String foreignName) {
-    }
-
-    public static boolean isValidBarcode(String barcode) {
-        return StrUtil.isNotBlank(barcode) && !StrUtil.equalsIgnoreCase(StrUtil.trim(barcode), "Subtotal");
     }
 
     public static boolean hasTaxRateColumn(InvoiceTemplate template) {
@@ -56,11 +52,7 @@ public final class InvoiceCleanSupport {
         return value.setScale(2, RoundingMode.HALF_UP);
     }
 
-    public static BigDecimal readTaxRateFromColumn(Sheet sheet, int rowIndex, InvoiceTemplate template,
-                                                   InvoiceCleanOptions options) {
-        if (StrUtil.isBlank(template.getTaxRateCol())) {
-            return null;
-        }
+    public static BigDecimal readTaxRateFromColumn(Sheet sheet, int rowIndex, InvoiceTemplate template) {
         return readDecimal(sheet, rowIndex, template.getTaxRateCol(), false);
     }
 
@@ -109,11 +101,8 @@ public final class InvoiceCleanSupport {
 
     public static NameParts resolveName(Sheet sheet, int rowIndex, InvoiceTemplate template) {
         String rawName = ExcelCellReader.readString(sheet, rowIndex, template.getForeignNameCol());
-        if (StrUtil.isNotBlank(template.getChineseNameCol())) {
-            String chinese = ExcelCellReader.readString(sheet, rowIndex, template.getChineseNameCol());
-            return new NameParts(StrUtil.trim(chinese), StrUtil.trim(rawName));
-        }
-        return new NameParts("", StrUtil.trim(rawName));
+        String chinese = ExcelCellReader.readString(sheet, rowIndex, template.getChineseNameCol());
+        return new NameParts(StrUtil.trim(chinese), StrUtil.trim(rawName));
     }
 
     public static NameParts splitMixedName(String raw) {
@@ -141,16 +130,39 @@ public final class InvoiceCleanSupport {
         return new NameParts(chinese.toString().trim(), foreign.toString().trim());
     }
 
-    public static void appendName(List<InvoiceCleanRow> rows, NameParts nameParts) {
+    public static void appendName(List<InvoiceCleanRow> rows, NameParts nameParts, Sheet sheet, int rowIndex, InvoiceTemplate template) {
         if (rows.isEmpty()) {
             return;
         }
-        if (StrUtil.isBlank(nameParts.chinese()) && StrUtil.isBlank(nameParts.foreignName())) {
+        String chinese = nameParts.chinese();
+        String foreign = getStr(nameParts);
+        if (StrUtil.isEmpty(chinese) && StrUtil.isEmpty(foreign)) {
             return;
         }
+        String lastRowBarcode = ExcelCellReader.readString(sheet, rowIndex - 1, template.getBarcodeCol());
+        // 如果上一行没有条码, 则不合并
+        if(StrUtil.isEmpty(lastRowBarcode)) {
+            return;
+        }
+
         InvoiceCleanRow last = rows.get(rows.size() - 1);
-        last.setChineseName(joinName(last.getChineseName(), nameParts.chinese()));
-        last.setForeignName(joinName(last.getForeignName(), nameParts.foreignName()));
+        if (StrUtil.isNotEmpty(chinese)) {
+            // 这里的名称如果是数字类型需要二次处理
+            if (chinese.matches("^-?\\d+\\.0+$")) {
+                chinese = chinese.substring(0, chinese.indexOf('.'));
+            }
+            last.setChineseName(joinName(last.getChineseName(), chinese));
+        }
+        if (StrUtil.isNotEmpty(foreign)) {
+            if (foreign.matches("^-?\\d+\\.0+$")) {
+                foreign = foreign.substring(0, foreign.indexOf('.'));
+            }
+            last.setForeignName(joinName(last.getForeignName(), foreign));
+        }
+    }
+
+    private static String getStr(NameParts nameParts) {
+        return nameParts.foreignName();
     }
 
     public static BigDecimal parseInvoiceTotal(Sheet sheet) {

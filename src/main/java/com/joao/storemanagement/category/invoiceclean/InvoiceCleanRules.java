@@ -11,21 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.DEFAULT_TAX_RATE;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.appendName;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.calcTaxExcludedPrice;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.calcTaxIncludedPrice;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.calcLineTotalIncTax;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.hasTaxRateColumn;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.isValidBarcode;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.isZeroPricePalletRow;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.money;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.readLineSubtotal;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.readTaxRateFromColumn;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.readUnitPriceExTax;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.readUnitPriceIncTax;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.resolveName;
-import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.splitMixedName;
+import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.*;
 
 /**
  * 发票明细行解析规则组合器，供各供应商清洗策略复用。
@@ -63,7 +49,7 @@ public final class InvoiceCleanRules {
         int lastRow = sheet.getLastRowNum();
 
         for (int rowIndex = startRow; rowIndex <= lastRow; rowIndex++) {
-            // 命中 Subtotal 合计行时终止扫描，避免页脚字段被误读为商品行
+            // 校验当前行是否还是数据行
             if (shouldBreakAtRow(sheet, rowIndex, template, options)) {
                 break;
             }
@@ -74,13 +60,15 @@ public final class InvoiceCleanRules {
             // 解析中/外文品名（独立列或混合列拆分）
             InvoiceCleanSupport.NameParts nameParts = resolveNameParts(sheet, rowIndex, template, options);
 
-            if (!isValidBarcode(barcode)) {
+            // 如果没有条码
+            if (StrUtil.isEmpty(barcode)) {
+                // 当前供应商是否配置了,无条码但是有商品数量的过滤配置
                 if (options.isFilterRowsWithoutBarcode()) {
-                    // 无条码但有数量的行视为无效商品，计入过滤统计
+                    // 无条码但有数量的行视为无法导入的商品，计入过滤统计
                     BigDecimal quantity = ExcelCellReader.readDecimal(sheet, rowIndex, template.getQuantityCol());
                     if (quantity == null) {
-                        // 仅有品名续行时，合并到上一有效行的名称字段
-                        appendName(rows, nameParts);
+                        // 如果没有条码也没有数量, 可能是上一行商品的商品名过长导致换行, 这里合并商品名
+                        appendName(rows, nameParts, sheet, rowIndex, template);
                         continue;
                     }
                     filteredCount++;
@@ -90,28 +78,23 @@ public final class InvoiceCleanRules {
                     continue;
                 }
                 // 不过滤时，将无条码续行品名合并到上一行
-                appendName(rows, nameParts);
+                appendName(rows, nameParts, sheet, rowIndex, template);
                 continue;
             }
-
-            // 读取数量列，空数量视为非商品行
             BigDecimal quantity = ExcelCellReader.readDecimal(sheet, rowIndex, template.getQuantityCol());
+            // 有条码但是没有数量视为非商品行
             if (quantity == null) {
-                appendName(rows, nameParts);
+                appendName(rows, nameParts, sheet, rowIndex, template);
                 continue;
             }
 
             // 中英文品名均为空时跳过
-            if (StrUtil.isBlank(nameParts.chinese()) && StrUtil.isBlank(nameParts.foreignName())) {
+            if (StrUtil.isEmpty(nameParts.chinese()) && StrUtil.isEmpty(nameParts.foreignName())) {
                 continue;
             }
 
             // 解析行税率：优先列值，否则模板默认或系统默认
             BigDecimal taxRate = resolveTaxRate(sheet, rowIndex, template, options);
-            // 配置了税率列且要求仅读列值时，缺税率的行直接跳过
-            if (options.isTaxRateFromColumnOnly() && hasTaxRateColumn(template) && taxRate == null) {
-                continue;
-            }
 
             // 分别读取不含税/含税单价，缺失一侧由另一侧反算补齐
             BigDecimal unitPriceExTax = readUnitPriceExTax(sheet, rowIndex, template, options);
@@ -182,7 +165,7 @@ public final class InvoiceCleanRules {
     private static InvoiceCleanSupport.NameParts resolveNameParts(Sheet sheet, int rowIndex,
                                                                   InvoiceTemplate template,
                                                                   InvoiceCleanOptions options) {
-        if (StrUtil.isNotBlank(template.getChineseNameCol())) {
+        if (StrUtil.isNotEmpty(template.getChineseNameCol())) {
             return resolveName(sheet, rowIndex, template);
         }
         String rawName = ExcelCellReader.readString(sheet, rowIndex, template.getForeignNameCol());
@@ -207,19 +190,17 @@ public final class InvoiceCleanRules {
     }
 
     /**
-     * 解析行税率：优先读税率列；列值为空时按 options 决定是否回退模板默认税率。
+     * 解析行税率：如果模版配置了税率列, 优先使用, 如果当前行税率是空, 则赋值默认税率;
+     * 如果没有配置税率列, 则赋值默认税率。
      */
     private static BigDecimal resolveTaxRate(Sheet sheet, int rowIndex, InvoiceTemplate template,
                                              InvoiceCleanOptions options) {
-        BigDecimal taxRate = readTaxRateFromColumn(sheet, rowIndex, template, options);
-        if (taxRate != null) {
-            return taxRate;
+
+        if (hasTaxRateColumn(template)) {
+            BigDecimal bigDecimal = readTaxRateFromColumn(sheet, rowIndex, template);
+            return bigDecimal == null ? DEFAULT_TAX_RATE : bigDecimal;
         }
-        // 要求仅读列值且已配置税率列时，不回退默认税率
-        if (options.isTaxRateFromColumnOnly() && hasTaxRateColumn(template)) {
-            return null;
-        }
-        return template.getDefaultTaxRate() == null ? DEFAULT_TAX_RATE : template.getDefaultTaxRate();
+        return DEFAULT_TAX_RATE;
     }
 
     /**
@@ -267,28 +248,19 @@ public final class InvoiceCleanRules {
     }
 
     /**
-     * 判断当前行是否为 Subtotal 停扫点。
-     * 依次检查条码列、整行扫描（breakOnSubtotalRow）、指定列（subtotalStopColumn）三种策略。
+     * 判断当前行是否是数据行, 需要供应商配置开启页脚检测
+     * 如果当前行的20列之内存在Base Incidencia 则视为页脚, 结束数据行读取
      */
     private static boolean shouldBreakAtRow(Sheet sheet, int rowIndex, InvoiceTemplate template,
                                            InvoiceCleanOptions options) {
-        String barcode = ExcelCellReader.readString(sheet, rowIndex, template.getBarcodeCol());
-        if (StrUtil.equalsIgnoreCase(StrUtil.trim(barcode), "Subtotal")) {
-            return true;
-        }
-        if (options.isBreakOnSubtotalRow()) {
-            // 小计标签可能出现在条码列以外的任意列（如飞跃发票）
+        if (options.isBreakOnTaxableBase()) {
+            // 小计标签可能出现在条码列以外的任意列
             for (int col = 0; col <= 20; col++) {
                 String text = ExcelCellReader.readString(sheet, rowIndex, columnLetter(col));
-                if (StrUtil.equalsIgnoreCase(StrUtil.trim(text), "Subtotal")) {
+                if (StrUtil.equalsIgnoreCase(StrUtil.trim(text), "Base Incidencia")) {
                     return true;
                 }
             }
-        }
-        if (StrUtil.isNotBlank(options.getSubtotalStopColumn())) {
-            // 仅检查指定列的小计标签（飞跃发票在 C 列标记合计行）
-            String label = ExcelCellReader.readString(sheet, rowIndex, options.getSubtotalStopColumn());
-            return StrUtil.equalsIgnoreCase(StrUtil.trim(label), "Subtotal");
         }
         return false;
     }
