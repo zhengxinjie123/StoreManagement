@@ -9,7 +9,7 @@ public class InvoiceCleanOptions {
 
     /** 有数量但无条码的行视为无效商品并过滤，计入备注统计 */
     @Builder.Default
-    private final boolean filterRowsWithoutBarcode = false;
+    private final boolean filterRowsWithoutBarcode = true;
 
     /** 未配置中文名列时，从外文名列拆分中英文 */
     @Builder.Default
@@ -39,6 +39,10 @@ public class InvoiceCleanOptions {
     @Builder.Default
     private final boolean productHasNewBarcode = false;
 
+    /** 发票页脚整单汇总解析模式 */
+    @Builder.Default
+    private final FooterSummaryMode footerSummaryMode = FooterSummaryMode.NONE;
+
     /** 指定列出现 Subtotal 标签时停止（飞跃发票在 C 列标记合计行） */
     private final String subtotalStopColumn;
 
@@ -46,26 +50,28 @@ public class InvoiceCleanOptions {
         return InvoiceCleanOptions.builder().build();
     }
 
-    public static InvoiceCleanOptions withFilteredBarcodeRows() {
-        return InvoiceCleanOptions.builder().filterRowsWithoutBarcode(true).build();
-    }
-
-    public static InvoiceCleanOptions withMixedNameSplit() {
-        return InvoiceCleanOptions.builder().splitMixedChineseForeignName(true).build();
-    }
-
-    public static InvoiceCleanOptions withTaxRateColumnOnly() {
-        return InvoiceCleanOptions.builder().taxRateFromColumnOnly(true).build();
-    }
-
     public static InvoiceCleanOptions chenguang() {
-        return standard();
+        return InvoiceCleanOptions.builder()
+                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
+                .build();
     }
+
     public static InvoiceCleanOptions haopengyou() {
-        return standard();
+        return InvoiceCleanOptions.builder()
+                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
+                .build();
     }
+
     public static InvoiceCleanOptions jindong() {
-        return standard();
+        return InvoiceCleanOptions.builder()
+                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
+                .build();
+    }
+
+    public static InvoiceCleanOptions ouda() {
+        return InvoiceCleanOptions.builder()
+                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
+                .build();
     }
     public static InvoiceCleanOptions aiguozhe() {
         return InvoiceCleanOptions.builder()
@@ -76,7 +82,6 @@ public class InvoiceCleanOptions {
 
     public static InvoiceCleanOptions dazhong() {
         return InvoiceCleanOptions.builder()
-                .filterRowsWithoutBarcode(true)
                 .splitMixedChineseForeignName(true)
                 .build();
     }
@@ -84,6 +89,7 @@ public class InvoiceCleanOptions {
     public static InvoiceCleanOptions feiyue() {
         return InvoiceCleanOptions.builder()
                 .subtotalStopColumn("C")
+                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
                 .build();
     }
 

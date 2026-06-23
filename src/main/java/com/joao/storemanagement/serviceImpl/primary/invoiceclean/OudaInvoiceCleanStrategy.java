@@ -6,12 +6,12 @@ import com.joao.storemanagement.category.invoiceclean.InvoiceCleanStrategyKeys;
 import org.springframework.stereotype.Component;
 
 /**
- * 飞跃供应商清洗策略。
+ * 欧达供应商清洗策略。
  */
-@Component(InvoiceCleanStrategyKeys.FEIYUE)
-public class FeiyueInvoiceCleanStrategy extends AbstractInvoiceCleanStrategy {
+@Component(InvoiceCleanStrategyKeys.OUDA)
+public class OudaInvoiceCleanStrategy extends AbstractInvoiceCleanStrategy {
 
-    public FeiyueInvoiceCleanStrategy() {
-        super(InvoiceCleanOptions.feiyue());
+    public OudaInvoiceCleanStrategy() {
+        super(InvoiceCleanOptions.ouda());
     }
 }

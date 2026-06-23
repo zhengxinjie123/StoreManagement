@@ -15,6 +15,7 @@ public final class InvoiceCleanStrategyKeys {
     public static final String HAOPENGYOU = "好朋友";
     public static final String JINDONG = "金东";
     public static final String AIGUOZHE = "爱国者";
+    public static final String OUDA = "欧达";
 
     private InvoiceCleanStrategyKeys() {
     }

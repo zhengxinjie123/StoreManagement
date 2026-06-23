@@ -15,10 +15,11 @@ public interface InvoiceCleanStrategy {
     InvoiceParseResult parse(Sheet sheet, InvoiceTemplate template, boolean taxIncluded);
 
     /**
-     * 供应商特有的页脚汇总解析。
+     * 供应商特有的页脚汇总解析，默认由 {@link AbstractInvoiceCleanStrategy} 按
+     * {@link InvoiceCleanOptions#getFooterSummaryMode()} 分发；仅需特殊逻辑时子类再 override。
      * <ul>
-     *   <li>晨光 / 飞跃：{@link SubTotalDtoTotalFooterSupport}（Sub Total + Dto. Total 整单折扣）</li>
-     *   <li>诚信等：默认 null，由 {@link InvoiceCleanSupport#parseInvoiceTotal} 读取 Total 行，
+     *   <li>晨光 / 飞跃 / 欧达等：{@link FooterSummaryMode#SUB_TOTAL_DTO}</li>
+     *   <li>诚信等：{@link FooterSummaryMode#NONE}，由 {@link InvoiceCleanSupport#parseInvoiceTotal} 读取 Total 行，
      *       折扣从明细行单价×数量与小计差额汇总</li>
      * </ul>
      */
