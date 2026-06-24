@@ -1,5 +1,6 @@
 package com.joao.storemanagement.category.invoiceclean;
 
+import com.joao.storemanagement.entity.primary.InvoiceTemplate;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -29,10 +30,6 @@ public class InvoiceCleanOptions {
     @Builder.Default
     private final boolean breakOnTaxableBase = false;
 
-    /** 发票中的单价是不含税 但是小计是含税时, 小计为含税 */
-    @Builder.Default
-    private final boolean includeTaxRateSubTotal = false;
-
     /** 发票中的条码有对应的新条码 */
     @Builder.Default
     private final boolean productHasNewBarcode = false;
@@ -41,92 +38,35 @@ public class InvoiceCleanOptions {
     @Builder.Default
     private final FooterSummaryMode footerSummaryMode = FooterSummaryMode.NONE;
 
+    /** 如果条码不符合EAN13, 直接过滤 */
+    @Builder.Default
+    private final boolean skipBarcodeNotEAN13 = false;
+
     public static InvoiceCleanOptions standard() {
         return InvoiceCleanOptions.builder().build();
     }
 
-    public static InvoiceCleanOptions chenguang() {
+    public static InvoiceCleanOptions fromTemplate(InvoiceTemplate template) {
+        if (template == null) {
+            return standard();
+        }
         return InvoiceCleanOptions.builder()
-                .breakOnTaxableBase(true)
-                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
+                .filterRowsWithoutBarcode(defaultTrue(template.getFilterRowsWithoutBarcode()))
+                .splitMixedChineseForeignName(Boolean.TRUE.equals(template.getSplitMixedChineseForeignName()))
+                .stripCurrencyFromPrice(Boolean.TRUE.equals(template.getStripCurrencyFromPrice()))
+                .skipZeroPricePalletRows(Boolean.TRUE.equals(template.getSkipZeroPricePalletRows()))
+                .breakOnTaxableBase(Boolean.TRUE.equals(template.getBreakOnTaxableBase()))
+                .productHasNewBarcode(Boolean.TRUE.equals(template.getProductHasNewBarcode()))
+                .footerSummaryMode(defaultFooterSummaryMode(template.getFooterSummaryMode()))
+                .skipBarcodeNotEAN13(Boolean.TRUE.equals(template.getSkipBarcodeNotEAN13()))
                 .build();
     }
 
-    public static InvoiceCleanOptions haopengyou() {
-        return InvoiceCleanOptions.builder()
-                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
-                .build();
+    private static boolean defaultTrue(Boolean value) {
+        return value == null || value;
     }
 
-    public static InvoiceCleanOptions jindong() {
-        return InvoiceCleanOptions.builder()
-                .breakOnTaxableBase(true)
-                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
-                .build();
-    }
-
-    public static InvoiceCleanOptions ouda() {
-        return InvoiceCleanOptions.builder()
-                .breakOnTaxableBase(true)
-                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
-                .build();
-    }
-    public static InvoiceCleanOptions aiguozhe() {
-        return InvoiceCleanOptions.builder()
-                .includeTaxRateSubTotal(true)
-                .productHasNewBarcode(true)
-                .build();
-    }
-
-    public static InvoiceCleanOptions dazhong() {
-        return InvoiceCleanOptions.builder()
-                .splitMixedChineseForeignName(true)
-                .build();
-    }
-
-    public static InvoiceCleanOptions baike() {
-        return InvoiceCleanOptions.builder()
-                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
-                .breakOnTaxableBase(true)
-                .build();
-    }
-
-    public static InvoiceCleanOptions feiyue() {
-        return InvoiceCleanOptions.builder()
-                .breakOnTaxableBase(true)
-                .footerSummaryMode(FooterSummaryMode.SUB_TOTAL_DTO)
-                .build();
-    }
-
-    public static InvoiceCleanOptions hongtaiyang() {
-        return InvoiceCleanOptions.builder()
-                .stripCurrencyFromPrice(true)
-                .build();
-    }
-
-    public static InvoiceCleanOptions maxi() {
-        return InvoiceCleanOptions.builder()
-                .stripCurrencyFromPrice(true)
-                .skipZeroPricePalletRows(true)
-                .build();
-    }
-
-
-    public static InvoiceCleanOptions chengxin() {
-        return InvoiceCleanOptions.builder()
-                .breakOnTaxableBase(true)
-                .build();
-    }
-
-    public static InvoiceCleanOptions juxin() {
-        return InvoiceCleanOptions.builder()
-                .breakOnTaxableBase(true)
-                .build();
-    }
-
-    public static InvoiceCleanOptions ouya() {
-        return InvoiceCleanOptions.builder()
-                .breakOnTaxableBase(true)
-                .build();
+    private static FooterSummaryMode defaultFooterSummaryMode(FooterSummaryMode mode) {
+        return mode == null ? FooterSummaryMode.NONE : mode;
     }
 }

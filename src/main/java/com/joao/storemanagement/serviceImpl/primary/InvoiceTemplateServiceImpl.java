@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.joao.storemanagement.category.invoiceclean.FooterSummaryMode;
 import com.joao.storemanagement.config.StoreProperties;
 import com.joao.storemanagement.dto.primary.InvoiceTemplateDTO;
 import com.joao.storemanagement.entity.primary.InvoiceTemplate;
@@ -151,6 +152,9 @@ public class InvoiceTemplateServiceImpl implements InvoiceTemplateService {
         if (StrUtil.isNotBlank(form.getChineseNameCol())) {
             validateColumn("中文名列", form.getChineseNameCol());
         }
+        if (StrUtil.isNotBlank(form.getNewBarcodeCol())) {
+            validateColumn("新条码列", form.getNewBarcodeCol());
+        }
         if (StrUtil.isNotBlank(form.getTaxRateCol())) {
             validateColumn("税率列", form.getTaxRateCol());
         }
@@ -160,6 +164,7 @@ public class InvoiceTemplateServiceImpl implements InvoiceTemplateService {
         if (StrUtil.isNotBlank(form.getLineSubtotalCol())) {
             validateColumn("行小计列", form.getLineSubtotalCol());
         }
+        parseFooterSummaryMode(form.getFooterSummaryMode());
     }
 
     private void validateColumn(String label, String column) {
@@ -202,10 +207,33 @@ public class InvoiceTemplateServiceImpl implements InvoiceTemplateService {
                 ? storeProperties.getInvoice().getDefaultTaxRate()
                 : form.getDefaultTaxRate());
         entity.setTaxIncluded(form.getTaxIncluded());
+        entity.setFilterRowsWithoutBarcode(defaultTrue(form.getFilterRowsWithoutBarcode()));
+        entity.setSplitMixedChineseForeignName(Boolean.TRUE.equals(form.getSplitMixedChineseForeignName()));
+        entity.setStripCurrencyFromPrice(Boolean.TRUE.equals(form.getStripCurrencyFromPrice()));
+        entity.setSkipZeroPricePalletRows(Boolean.TRUE.equals(form.getSkipZeroPricePalletRows()));
+        entity.setBreakOnTaxableBase(Boolean.TRUE.equals(form.getBreakOnTaxableBase()));
+        entity.setProductHasNewBarcode(Boolean.TRUE.equals(form.getProductHasNewBarcode()));
+        entity.setSkipBarcodeNotEAN13(Boolean.TRUE.equals(form.getSkipBarcodeNotEAN13()));
+        entity.setFooterSummaryMode(parseFooterSummaryMode(form.getFooterSummaryMode()));
         entity.setRemark(StrUtil.blankToDefault(form.getRemark(), null));
     }
 
     private String normalizeColumn(String column) {
         return StrUtil.blankToDefault(column, "").trim().toUpperCase();
+    }
+
+    private boolean defaultTrue(Boolean value) {
+        return value == null || Boolean.TRUE.equals(value);
+    }
+
+    private FooterSummaryMode parseFooterSummaryMode(String mode) {
+        if (StrUtil.isBlank(mode)) {
+            return FooterSummaryMode.NONE;
+        }
+        try {
+            return FooterSummaryMode.valueOf(mode.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException("页脚解析模式无效: " + mode);
+        }
     }
 }

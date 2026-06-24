@@ -11,8 +11,10 @@ import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public final class InvoiceCleanSupport {
 
@@ -24,9 +26,6 @@ public final class InvoiceCleanSupport {
     private InvoiceCleanSupport() {
     }
 
-    public record NameParts(String chinese, String foreignName) {
-    }
-
     public static boolean hasTaxRateColumn(InvoiceTemplate template) {
         return StrUtil.isNotBlank(template.getTaxRateCol());
     }
@@ -36,7 +35,7 @@ public final class InvoiceCleanSupport {
     }
 
     public static boolean isZeroPricePalletRow(NameParts nameParts, BigDecimal unitPriceExTax,
-                                             BigDecimal unitPriceIncTax, boolean taxIncluded) {
+                                               BigDecimal unitPriceIncTax, boolean taxIncluded) {
         String name = StrUtil.trim(StrUtil.nullToEmpty(nameParts.chinese()) + " "
                 + StrUtil.nullToEmpty(nameParts.foreignName()));
         if (!StrUtil.containsIgnoreCase(name, "PALLET")) {
@@ -141,7 +140,7 @@ public final class InvoiceCleanSupport {
         }
         String lastRowBarcode = ExcelCellReader.readString(sheet, rowIndex - 1, template.getBarcodeCol());
         // 如果上一行没有条码, 则不合并
-        if(StrUtil.isEmpty(lastRowBarcode)) {
+        if (StrUtil.isEmpty(lastRowBarcode)) {
             return;
         }
 
@@ -181,41 +180,43 @@ public final class InvoiceCleanSupport {
     }
 
     public static InvoiceCleanSummaryVO buildSummary(List<InvoiceCleanRow> rows, boolean taxIncluded,
-                                                 BigDecimal footerTotal, int filteredCount,
-                                                 BigDecimal filteredAmount) {
-        return buildSummary(rows, taxIncluded, footerTotal, null, filteredCount, filteredAmount, null);
+                                                     BigDecimal footerTotal, int filteredCount,
+                                                     BigDecimal filteredAmount) {
+        return buildSummary(rows, taxIncluded, footerTotal, null, filteredCount, filteredAmount, null, null);
     }
 
     public static InvoiceCleanSummaryVO buildSummary(List<InvoiceCleanRow> rows, boolean taxIncluded,
-                                                 BigDecimal footerTotal,
-                                                 InvoiceFooterSummary invoiceFooter,
-                                                 int filteredCount,
-                                                 BigDecimal filteredAmount) {
-        return buildSummary(rows, taxIncluded, footerTotal, invoiceFooter, filteredCount, filteredAmount, null);
+                                                     BigDecimal footerTotal,
+                                                     InvoiceFooterSummary invoiceFooter,
+                                                     int filteredCount,
+                                                     BigDecimal filteredAmount) {
+        return buildSummary(rows, taxIncluded, footerTotal, invoiceFooter, filteredCount, filteredAmount, null, null);
     }
 
     public static InvoiceCleanSummaryVO buildSummary(List<InvoiceCleanRow> rows, boolean taxIncluded,
-                                                 BigDecimal footerTotal,
-                                                 InvoiceFooterSummary invoiceFooter,
-                                                 int filteredCount,
-                                                 BigDecimal filteredAmount,
-                                                 String barcodeMappingRemark) {
+                                                     BigDecimal footerTotal,
+                                                     InvoiceFooterSummary invoiceFooter,
+                                                     int filteredCount,
+                                                     BigDecimal filteredAmount,
+                                                     String barcodeMappingRemark,
+                                                     Set<Integer> rowIndexSet) {
         if (invoiceFooter != null && invoiceFooter.hasInvoiceLevelDiscount()) {
             return buildInvoiceFooterSummary(rows, taxIncluded, invoiceFooter, filteredCount, filteredAmount,
-                    barcodeMappingRemark);
+                    barcodeMappingRemark, rowIndexSet);
         }
         if (taxIncluded) {
-            return buildTaxIncludedSummary(rows, footerTotal, filteredCount, filteredAmount, barcodeMappingRemark);
+            return buildTaxIncludedSummary(rows, footerTotal, filteredCount, filteredAmount, barcodeMappingRemark, rowIndexSet);
         }
-        return buildTaxExcludedSummary(rows, footerTotal, filteredCount, filteredAmount, barcodeMappingRemark);
+        return buildTaxExcludedSummary(rows, footerTotal, filteredCount, filteredAmount, barcodeMappingRemark, rowIndexSet);
     }
 
     private static InvoiceCleanSummaryVO buildInvoiceFooterSummary(List<InvoiceCleanRow> rows,
-                                                                 boolean taxIncluded,
-                                                                 InvoiceFooterSummary invoiceFooter,
-                                                                 int filteredCount,
-                                                                 BigDecimal filteredAmount,
-                                                                 String barcodeMappingRemark) {
+                                                                   boolean taxIncluded,
+                                                                   InvoiceFooterSummary invoiceFooter,
+                                                                   int filteredCount,
+                                                                   BigDecimal filteredAmount,
+                                                                   String barcodeMappingRemark,
+                                                                   Set<Integer> rowIndexSet) {
         BigDecimal totalQuantity = BigDecimal.ZERO;
         for (InvoiceCleanRow row : rows) {
             totalQuantity = totalQuantity.add(row.getQuantity());
@@ -228,7 +229,7 @@ public final class InvoiceCleanSupport {
                 .taxIncluded(taxIncluded)
                 .filteredCount(filteredCount)
                 .filteredAmount(filteredAmount)
-                .remark(buildCleanRemark(filteredCount, filteredAmount, barcodeMappingRemark))
+                .remark(buildCleanRemark(filteredCount, filteredAmount, barcodeMappingRemark, rowIndexSet))
                 .build();
     }
 
@@ -236,7 +237,8 @@ public final class InvoiceCleanSupport {
                                                                  BigDecimal footerTotal,
                                                                  int filteredCount,
                                                                  BigDecimal filteredAmount,
-                                                                 String barcodeMappingRemark) {
+                                                                 String barcodeMappingRemark,
+                                                                 Set<Integer> rowIndexSet) {
         BigDecimal totalQuantity = BigDecimal.ZERO;
         BigDecimal amountBeforeDiscount = BigDecimal.ZERO;
         BigDecimal subtotalIncTax = BigDecimal.ZERO;
@@ -265,15 +267,16 @@ public final class InvoiceCleanSupport {
                 .taxIncluded(true)
                 .filteredCount(filteredCount)
                 .filteredAmount(filteredAmount)
-                .remark(buildCleanRemark(filteredCount, filteredAmount, barcodeMappingRemark))
+                .remark(buildCleanRemark(filteredCount, filteredAmount, barcodeMappingRemark, rowIndexSet))
                 .build();
     }
 
     private static InvoiceCleanSummaryVO buildTaxExcludedSummary(List<InvoiceCleanRow> rows,
-                                                               BigDecimal footerTotal,
-                                                               int filteredCount,
-                                                               BigDecimal filteredAmount,
-                                                               String barcodeMappingRemark) {
+                                                                 BigDecimal footerTotal,
+                                                                 int filteredCount,
+                                                                 BigDecimal filteredAmount,
+                                                                 String barcodeMappingRemark,
+                                                                 Set<Integer> rowIndexSet) {
         BigDecimal totalQuantity = BigDecimal.ZERO;
         BigDecimal amountBeforeDiscount = BigDecimal.ZERO;
         BigDecimal subtotalExTax = BigDecimal.ZERO;
@@ -308,8 +311,24 @@ public final class InvoiceCleanSupport {
                 .taxIncluded(false)
                 .filteredCount(filteredCount)
                 .filteredAmount(filteredAmount)
-                .remark(buildCleanRemark(filteredCount, filteredAmount, barcodeMappingRemark))
+                .remark(buildCleanRemark(filteredCount, filteredAmount, barcodeMappingRemark, rowIndexSet))
                 .build();
+    }
+
+    /**
+     * 按表格明细行计算折前金额（与汇总口径一致）：含税模式累加含税单价×数量，否则累加不含税单价×数量。
+     * 用于与页脚解析出的折前金额做一致性校验。
+     */
+    public static BigDecimal calcAmountBeforeDiscount(List<InvoiceCleanRow> rows, boolean taxIncluded) {
+        BigDecimal amount = BigDecimal.ZERO;
+        for (InvoiceCleanRow row : rows) {
+            BigDecimal price = taxIncluded ? row.getUnitPriceIncTax() : row.getUnitPriceExTax();
+            if (price == null || row.getQuantity() == null) {
+                continue;
+            }
+            amount = amount.add(price.multiply(row.getQuantity()));
+        }
+        return money(amount);
     }
 
     public static String formatBarcodeMappingRemark(Map<String, String> barcodeMappings) {
@@ -327,23 +346,25 @@ public final class InvoiceCleanSupport {
     }
 
     public static String buildCleanRemark(int filteredCount, BigDecimal filteredAmount) {
-        return buildCleanRemark(filteredCount, filteredAmount, null);
+        return buildCleanRemark(filteredCount, filteredAmount, null, null);
     }
 
     public static String buildCleanRemark(int filteredCount, BigDecimal filteredAmount,
-                                          String barcodeMappingRemark) {
-        String filteredRemark = null;
+                                          String barcodeMappingRemark, Set<Integer> rowIndexSet) {
+        StringBuilder sb = new StringBuilder();
         if (filteredCount > 0) {
-            filteredRemark = String.format("过滤无条码商品 %d 条，金额 %s",
-                    filteredCount, filteredAmount.toPlainString());
+            sb.append(String.format("过滤无效商品 %d 条，金额 %s；",
+                    filteredCount, filteredAmount.toPlainString()))
+                    .append("具体原发票所在行数如下: ")
+                    .append(
+                    rowIndexSet.stream()
+                            .sorted()
+                            .map(String::valueOf)
+                            .collect(Collectors.joining(", "))
+            );
         }
-        if (StrUtil.isBlank(filteredRemark)) {
-            return StrUtil.blankToDefault(barcodeMappingRemark, null);
-        }
-        if (StrUtil.isBlank(barcodeMappingRemark)) {
-            return filteredRemark;
-        }
-        return filteredRemark + "；" + barcodeMappingRemark;
+
+        return sb.append(StrUtil.blankToDefault(barcodeMappingRemark, "")).toString();
     }
 
     private static void appendToken(StringBuilder builder, String token) {
@@ -370,5 +391,8 @@ public final class InvoiceCleanSupport {
             value = (value - 1) / 26;
         }
         return builder.toString();
+    }
+
+    public record NameParts(String chinese, String foreignName) {
     }
 }

@@ -11,14 +11,9 @@ import java.util.Map;
 @Component
 public class InvoiceCleanStrategyFactory {
 
-    private final Map<String, InvoiceCleanStrategy> strategyMap;
-    private final SupplierCleanStrategySupport supplierMatcher;
     private final InvoiceCleanStrategy defaultStrategy;
 
-    public InvoiceCleanStrategyFactory(Map<String, InvoiceCleanStrategy> strategyMap,
-                                       SupplierCleanStrategySupport supplierMatcher) {
-        this.strategyMap = strategyMap;
-        this.supplierMatcher = supplierMatcher;
+    public InvoiceCleanStrategyFactory(Map<String, InvoiceCleanStrategy> strategyMap) {
         // 取出默认策略 Bean
         this.defaultStrategy = strategyMap.get(InvoiceCleanStrategyKeys.DEFAULT);
         if (defaultStrategy == null) {
@@ -28,13 +23,9 @@ public class InvoiceCleanStrategyFactory {
 
     /**
      * 根据供应商 GUID 解析匹配的清洗策略。
+     * 当前供应商差异已迁移到模板热配置字段，统一返回默认策略；保留工厂作为后续特殊策略扩展点。
      */
     public InvoiceCleanStrategy resolve(String supplierGuid) {
-        return strategyMap.entrySet().stream()
-                .filter(entry -> !InvoiceCleanStrategyKeys.DEFAULT.equals(entry.getKey()))
-                .filter(entry -> supplierMatcher.matchesSupplierName(supplierGuid, entry.getKey()))
-                .map(Map.Entry::getValue)
-                .findFirst()
-                .orElse(defaultStrategy);
+        return defaultStrategy;
     }
 }

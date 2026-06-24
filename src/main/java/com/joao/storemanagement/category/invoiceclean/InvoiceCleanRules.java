@@ -6,10 +6,7 @@ import com.joao.storemanagement.utils.ExcelCellReader;
 import org.apache.poi.ss.usermodel.Sheet;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport.*;
 
@@ -40,8 +37,10 @@ public final class InvoiceCleanRules {
     public static InvoiceParseResult parse(Sheet sheet, InvoiceTemplate template, boolean taxIncluded,
                                            InvoiceCleanOptions options) {
         List<InvoiceCleanRow> rows = new ArrayList<>();
+        List<InvoiceFilteredRow> filteredRows = new ArrayList<>();
         int filteredCount = 0;
         BigDecimal filteredAmount = BigDecimal.ZERO;
+        Set<Integer> rowIndexSet = new TreeSet<>();
         // 原条码 -> 新条码，按发票行顺序保留，同一原条码只记录首次映射
         Map<String, String> barcodeMappings = new LinkedHashMap<>();
         // 模板 dataStartRow 为 1-based，POI 行索引为 0-based
@@ -60,6 +59,11 @@ public final class InvoiceCleanRules {
             // 解析中/外文品名（独立列或混合列拆分）
             InvoiceCleanSupport.NameParts nameParts = resolveNameParts(sheet, rowIndex, template, options);
 
+            // 中英文品名均为空时跳过
+            if (StrUtil.isEmpty(nameParts.chinese()) && StrUtil.isEmpty(nameParts.foreignName())) {
+                continue;
+            }
+
             // 如果没有条码
             if (StrUtil.isEmpty(barcode)) {
                 // 当前供应商是否配置了,无条码但是有商品数量的过滤配置
@@ -73,8 +77,11 @@ public final class InvoiceCleanRules {
                     }
                     filteredCount++;
                     // 估算被过滤行的含税金额，供汇总备注使用
-                    filteredAmount = filteredAmount.add(
-                            estimateLineAmount(sheet, rowIndex, template, taxIncluded, quantity, options));
+                    BigDecimal amount = estimateLineAmount(sheet, rowIndex, template, taxIncluded, quantity, options);
+                    filteredAmount = filteredAmount.add(amount);
+                    rowIndexSet.add(rowIndex + 1);
+                    filteredRows.add(buildFilteredRow(sheet, rowIndex, template, options, taxIncluded,
+                            "", nameParts, quantity, amount, InvoiceFilteredRow.REASON_NO_BARCODE));
                     continue;
                 }
                 // 不过滤时，将无条码续行品名合并到上一行
@@ -88,10 +95,20 @@ public final class InvoiceCleanRules {
                 continue;
             }
 
-            // 中英文品名均为空时跳过
-            if (StrUtil.isEmpty(nameParts.chinese()) && StrUtil.isEmpty(nameParts.foreignName())) {
-                continue;
+            // 条码不为空, 并且开启了过滤非ean13条码的供应商, 会将这些条码过滤记入备注
+            if (options.isSkipBarcodeNotEAN13()) {
+                if (barcode.length() != 13) {
+                    filteredCount++;
+                    BigDecimal amount = estimateLineAmount(sheet, rowIndex, template, taxIncluded, quantity, options);
+                    filteredAmount = filteredAmount.add(amount);
+                    rowIndexSet.add(rowIndex + 1);
+                    filteredRows.add(buildFilteredRow(sheet, rowIndex, template, options, taxIncluded,
+                            StrUtil.trim(barcode), nameParts, quantity, amount, InvoiceFilteredRow.REASON_NON_EAN13));
+                    continue;
+                }
             }
+
+
 
             // 解析行税率：优先列值，否则模板默认或系统默认
             BigDecimal taxRate = resolveTaxRate(sheet, rowIndex, template, options);
@@ -120,7 +137,7 @@ public final class InvoiceCleanRules {
             BigDecimal lineSubtotalExTax;
             BigDecimal lineSubtotalIncTax;
             if (lineSubtotalFromCol != null) {
-                if (lineSubtotalColumnIsTaxIncluded(template, taxIncluded, options)) {
+                if (lineSubtotalColumnIsTaxIncluded(taxIncluded)) {
                     lineSubtotalIncTax = lineSubtotalFromCol;
                     lineSubtotalExTax = calcTaxExcludedPrice(lineSubtotalIncTax, taxRate);
                 } else {
@@ -135,6 +152,7 @@ public final class InvoiceCleanRules {
             BigDecimal outputPrice = taxIncluded ? unitPriceIncTax : unitPriceExTax;
 
             InvoiceCleanRow row = new InvoiceCleanRow();
+            row.setSourceRowIndex(rowIndex + 1);
             row.setBarcode(StrUtil.trim(barcode));
             row.setChineseName(nameParts.chinese());
             row.setForeignName(nameParts.foreignName());
@@ -154,7 +172,9 @@ public final class InvoiceCleanRules {
                 .rows(rows)
                 .filteredCount(filteredCount)
                 .filteredAmount(money(filteredAmount))
+                .rowIndexSet(rowIndexSet)
                 .barcodeMappingRemark(InvoiceCleanSupport.formatBarcodeMappingRemark(barcodeMappings))
+                .filteredRows(filteredRows)
                 .build();
     }
 
@@ -178,15 +198,10 @@ public final class InvoiceCleanRules {
 
     /**
      * 判断行小计列是否表示含税金额。
-     * 当模板仅配置含税价列、未配置不含税价列且整体为含税模式时为 true。
+     * 行小计跟随模板含税模式：含税入库时小计列按含税金额解析，不含税入库时按不含税金额解析。
      */
-    static boolean lineSubtotalColumnIsTaxIncluded(InvoiceTemplate template, boolean taxIncluded, InvoiceCleanOptions options) {
-        if (options.isIncludeTaxRateSubTotal()) {
-            return true;
-        }
-        return taxIncluded
-                && StrUtil.isBlank(template.getPriceCol())
-                && StrUtil.isNotBlank(template.getPriceTaxIncludedCol());
+    static boolean lineSubtotalColumnIsTaxIncluded(boolean taxIncluded) {
+        return taxIncluded;
     }
 
     /**
@@ -204,6 +219,39 @@ public final class InvoiceCleanRules {
     }
 
     /**
+     * 构建预览用过滤行。过滤行虽然不会直接进入清洗结果，但前端需要基于这些默认值修正后再归档。
+     */
+    private static InvoiceFilteredRow buildFilteredRow(Sheet sheet, int rowIndex, InvoiceTemplate template,
+                                                       InvoiceCleanOptions options, boolean taxIncluded,
+                                                       String barcode, InvoiceCleanSupport.NameParts nameParts,
+                                                       BigDecimal quantity, BigDecimal amount, String reason) {
+        BigDecimal taxRate = resolveTaxRate(sheet, rowIndex, template, options);
+        BigDecimal unitPriceExTax = readUnitPriceExTax(sheet, rowIndex, template, options);
+        BigDecimal unitPriceIncTax = readUnitPriceIncTax(sheet, rowIndex, template, options);
+        if (unitPriceExTax == null && unitPriceIncTax != null && taxRate != null) {
+            unitPriceExTax = calcTaxExcludedPrice(unitPriceIncTax, taxRate);
+        }
+        if (unitPriceIncTax == null && unitPriceExTax != null && taxRate != null) {
+            unitPriceIncTax = calcTaxIncludedPrice(unitPriceExTax, taxRate);
+        }
+        BigDecimal outputPrice = taxIncluded ? unitPriceIncTax : unitPriceExTax;
+        if (outputPrice == null && quantity != null && quantity.compareTo(BigDecimal.ZERO) != 0) {
+            outputPrice = amount.divide(quantity, 4, java.math.RoundingMode.HALF_UP);
+        }
+        return InvoiceFilteredRow.builder()
+                .sourceRowIndex(rowIndex + 1)
+                .barcode(barcode)
+                .chineseName(nameParts.chinese())
+                .foreignName(nameParts.foreignName())
+                .quantity(quantity)
+                .outputPrice(outputPrice)
+                .taxRate(taxRate)
+                .amount(amount)
+                .reason(reason)
+                .build();
+    }
+
+    /**
      * 估算被过滤行（无条码但有数量）的含税行金额，用于过滤统计。
      */
     private static BigDecimal estimateLineAmount(Sheet sheet, int rowIndex, InvoiceTemplate template,
@@ -214,7 +262,7 @@ public final class InvoiceCleanRules {
         // 有小计列时优先用小计估算
         BigDecimal lineSubtotalExTax = readLineSubtotal(sheet, rowIndex, template, options);
         if (lineSubtotalExTax != null) {
-            if (lineSubtotalColumnIsTaxIncluded(template, taxIncluded, options)) {
+            if (lineSubtotalColumnIsTaxIncluded(taxIncluded)) {
                 return money(lineSubtotalExTax);
             }
             if (taxRate != null) {

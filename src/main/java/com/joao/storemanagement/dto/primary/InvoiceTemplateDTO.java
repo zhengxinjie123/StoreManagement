@@ -59,6 +59,22 @@ public class InvoiceTemplateDTO {
     @NotNull(message = "是否含税入库不能为空")
     private Boolean taxIncluded;
 
+    private Boolean filterRowsWithoutBarcode;
+
+    private Boolean splitMixedChineseForeignName;
+
+    private Boolean stripCurrencyFromPrice;
+
+    private Boolean skipZeroPricePalletRows;
+
+    private Boolean breakOnTaxableBase;
+
+    private Boolean productHasNewBarcode;
+
+    private Boolean skipBarcodeNotEAN13;
+
+    private String footerSummaryMode;
+
     private Boolean enabled;
 
     private String remark;

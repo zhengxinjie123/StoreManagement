@@ -7,8 +7,10 @@ import com.joao.storemanagement.category.invoiceclean.InvoiceCleanRow;
 import com.joao.storemanagement.category.invoiceclean.InvoiceCleanStrategy;
 import com.joao.storemanagement.category.invoiceclean.InvoiceCleanStrategyFactory;
 import com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport;
+import com.joao.storemanagement.category.invoiceclean.InvoiceFilteredRow;
 import com.joao.storemanagement.category.invoiceclean.InvoiceFooterSummary;
 import com.joao.storemanagement.category.invoiceclean.InvoiceParseResult;
+import com.joao.storemanagement.dto.primary.InvoiceCleanConfirmDTO;
 import com.joao.storemanagement.entity.primary.ImportAttachment;
 import com.joao.storemanagement.entity.primary.InvoiceTemplate;
 import com.joao.storemanagement.enums.InvoiceCleanExtension;
@@ -20,6 +22,7 @@ import com.joao.storemanagement.service.primary.InvoiceCleanService;
 import com.joao.storemanagement.service.primary.InvoiceTemplateService;
 import com.joao.storemanagement.utils.GuidHelper;
 import com.joao.storemanagement.vo.primary.InvoiceArchiveVO;
+import com.joao.storemanagement.vo.primary.InvoiceCleanPreviewRowVO;
 import com.joao.storemanagement.vo.primary.InvoiceCleanPreviewVO;
 import com.joao.storemanagement.vo.primary.InvoiceCleanSummaryVO;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -49,6 +54,75 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
     @Override
     public InvoiceArchiveVO clean(String attachmentUuid, String supplierGuid, Long templateId) {
         CleanResult result = executeClean(attachmentUuid, templateId, supplierGuid);
+        return archiveRows(result.attachment(), result.rows(), result.summary());
+    }
+
+    @Override
+    public InvoiceCleanPreviewVO preview(String attachmentUuid, Long templateId, String supplierGuid) {
+        CleanResult result = executeClean(attachmentUuid, templateId, supplierGuid);
+        List<InvoiceCleanPreviewRowVO> previewRows = buildPreviewRows(
+                result.rows(), result.parseResult().getFilteredRows(), result.taxIncluded());
+
+        InvoiceFooterSummary footer = result.invoiceFooter();
+        boolean footerParsed = footer != null && footer.hasInvoiceLevelDiscount();
+        BigDecimal tableAmount = InvoiceCleanSupport.calcAmountBeforeDiscount(result.rows(), result.taxIncluded());
+        BigDecimal footerAmount = footerParsed ? footer.getAmountBeforeDiscount() : null;
+        boolean amountMismatch = footerParsed && footerAmount != null
+                && footerAmount.compareTo(tableAmount) != 0;
+
+        return InvoiceCleanPreviewVO.builder()
+                .summary(result.summary())
+                .rowCount(result.rows().size())
+                .templateName(result.template().getName())
+                .taxIncluded(result.summary().getTaxIncluded())
+                .rows(previewRows)
+                .footerParsed(footerParsed)
+                .footerAmountBeforeDiscount(footerAmount)
+                .tableAmountBeforeDiscount(tableAmount)
+                .amountMismatch(amountMismatch)
+                .build();
+    }
+
+    @Override
+    public InvoiceArchiveVO confirmArchive(String attachmentUuid, InvoiceCleanConfirmDTO form) {
+        if (StrUtil.isBlank(attachmentUuid)) {
+            throw new BusinessException("attachmentUuid 不能为空");
+        }
+        if (form == null || form.getRows() == null || form.getRows().isEmpty()) {
+            throw new BusinessException("归档明细不能为空");
+        }
+        ImportAttachment attachment = requireAttachment(attachmentUuid);
+        requireMatchingSupplier(attachment, form.getSupplierGuid());
+
+        List<InvoiceCleanRow> rows = new ArrayList<>();
+        for (InvoiceCleanConfirmDTO.Row source : form.getRows()) {
+            InvoiceCleanRow row = new InvoiceCleanRow();
+            row.setBarcode(StrUtil.trim(source.getBarcode()));
+            row.setForeignName(StrUtil.trim(source.getForeignName()));
+            row.setQuantity(source.getQuantity());
+            row.setOutputPrice(source.getOutputPrice());
+            row.setTaxRate(source.getTaxRate());
+            rows.add(row);
+        }
+        return archiveRows(attachment, rows, toSummary(form.getSummary()));
+    }
+
+    private InvoiceCleanSummaryVO toSummary(InvoiceCleanConfirmDTO.Summary source) {
+        if (source == null) {
+            return InvoiceCleanSummaryVO.builder().build();
+        }
+        return InvoiceCleanSummaryVO.builder()
+                .totalQuantity(source.getTotalQuantity())
+                .amountBeforeDiscount(source.getAmountBeforeDiscount())
+                .discountAmount(source.getDiscountAmount())
+                .totalAmount(source.getTotalAmount())
+                .taxIncluded(source.getTaxIncluded())
+                .remark(source.getRemark())
+                .build();
+    }
+
+    private InvoiceArchiveVO archiveRows(ImportAttachment attachment, List<InvoiceCleanRow> rows,
+                                         InvoiceCleanSummaryVO summary) {
         Path outputFile;
         try {
             outputFile = Files.createTempFile("invoice-clean-", ".xlsx");
@@ -56,16 +130,16 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
             throw new BusinessException("创建清洗输出文件失败: " + ex.getMessage(), ex);
         }
         try {
-            writeOutput(outputFile, result.rows());
+            writeOutput(outputFile, rows);
             InvoiceArchiveVO archive = invoiceArchiveService.register(
-                    result.attachment().getUuid(),
-                    result.attachment().getSupplierGuid(),
+                    attachment.getUuid(),
+                    attachment.getSupplierGuid(),
                     outputFile,
                     InvoiceCleanExtension.XLSX.getExtension(),
-                    result.rows().size(),
-                    result.summary());
+                    rows.size(),
+                    summary);
             // 清洗成功后更新附件清洗状态
-            importAttachmentService.markCleaned(attachmentUuid);
+            importAttachmentService.markCleaned(attachment.getUuid());
             return archive;
         } finally {
             try {
@@ -76,15 +150,56 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
         }
     }
 
-    @Override
-    public InvoiceCleanPreviewVO preview(String attachmentUuid, Long templateId, String supplierGuid) {
-        CleanResult result = executeClean(attachmentUuid, templateId, supplierGuid);
-        return InvoiceCleanPreviewVO.builder()
-                .summary(result.summary())
-                .rowCount(result.rows().size())
-                .templateName(result.template().getName())
-                .taxIncluded(result.summary().getTaxIncluded())
-                .build();
+    private List<InvoiceCleanPreviewRowVO> buildPreviewRows(List<InvoiceCleanRow> rows,
+                                                            List<InvoiceFilteredRow> filteredRows,
+                                                            boolean taxIncluded) {
+        List<InvoiceCleanPreviewRowVO> previewRows = new ArrayList<>();
+        for (InvoiceCleanRow row : rows) {
+            BigDecimal price = taxIncluded ? row.getUnitPriceIncTax() : row.getUnitPriceExTax();
+            BigDecimal amount = price != null && row.getQuantity() != null
+                    ? InvoiceCleanSupport.money(price.multiply(row.getQuantity()))
+                    : null;
+            previewRows.add(InvoiceCleanPreviewRowVO.builder()
+                    .sourceRowIndex(row.getSourceRowIndex())
+                    .barcode(row.getBarcode())
+                    .chineseName(row.getChineseName())
+                    .foreignName(row.getForeignName())
+                    .quantity(row.getQuantity())
+                    .outputPrice(row.getOutputPrice())
+                    .taxRate(row.getTaxRate())
+                    .amount(amount)
+                    .filtered(false)
+                    .build());
+        }
+        if (filteredRows != null) {
+            for (InvoiceFilteredRow filtered : filteredRows) {
+                previewRows.add(InvoiceCleanPreviewRowVO.builder()
+                        .sourceRowIndex(filtered.getSourceRowIndex())
+                        .barcode(filtered.getBarcode())
+                        .chineseName(filtered.getChineseName())
+                        .foreignName(filtered.getForeignName())
+                        .quantity(filtered.getQuantity())
+                        .outputPrice(filtered.getOutputPrice())
+                        .taxRate(filtered.getTaxRate())
+                        .amount(filtered.getAmount())
+                        .filtered(true)
+                        .filterReason(filtered.getReason())
+                        .filterReasonName(filterReasonName(filtered.getReason()))
+                        .build());
+            }
+        }
+        previewRows.sort(Comparator.comparingInt(InvoiceCleanPreviewRowVO::getSourceRowIndex));
+        return previewRows;
+    }
+
+    private String filterReasonName(String reason) {
+        if (InvoiceFilteredRow.REASON_NO_BARCODE.equals(reason)) {
+            return "无条码";
+        }
+        if (InvoiceFilteredRow.REASON_NON_EAN13.equals(reason)) {
+            return "非 EAN13 条码";
+        }
+        return "已过滤";
     }
 
     private CleanResult executeClean(String attachmentUuid, Long templateId, String supplierGuid) {
@@ -127,8 +242,9 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
                 invoiceFooter,
                 parseResult.getFilteredCount(),
                 parseResult.getFilteredAmount(),
-                parseResult.getBarcodeMappingRemark());
-        return new CleanResult(attachment, template, parseResult.getRows(), summary);
+                parseResult.getBarcodeMappingRemark(),
+                parseResult.getRowIndexSet());
+        return new CleanResult(attachment, template, parseResult, summary, invoiceFooter, taxIncluded);
     }
 
     private void writeOutput(Path outputFile, List<InvoiceCleanRow> rows) {
@@ -181,7 +297,13 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
     private record CleanResult(
             ImportAttachment attachment,
             InvoiceTemplate template,
-            List<InvoiceCleanRow> rows,
-            InvoiceCleanSummaryVO summary) {
+            InvoiceParseResult parseResult,
+            InvoiceCleanSummaryVO summary,
+            InvoiceFooterSummary invoiceFooter,
+            boolean taxIncluded) {
+
+        List<InvoiceCleanRow> rows() {
+            return parseResult.getRows();
+        }
     }
 }

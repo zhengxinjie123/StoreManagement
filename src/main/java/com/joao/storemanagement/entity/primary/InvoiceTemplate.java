@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.joao.storemanagement.category.invoiceclean.FooterSummaryMode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -69,6 +70,30 @@ public class InvoiceTemplate {
 
     @TableField("tax_included")
     private Boolean taxIncluded;
+
+    @TableField("filter_rows_without_barcode")
+    private Boolean filterRowsWithoutBarcode;
+
+    @TableField("split_mixed_chinese_foreign_name")
+    private Boolean splitMixedChineseForeignName;
+
+    @TableField("strip_currency_from_price")
+    private Boolean stripCurrencyFromPrice;
+
+    @TableField("skip_zero_price_pallet_rows")
+    private Boolean skipZeroPricePalletRows;
+
+    @TableField("break_on_taxable_base")
+    private Boolean breakOnTaxableBase;
+
+    @TableField("product_has_new_barcode")
+    private Boolean productHasNewBarcode;
+
+    @TableField("skip_barcode_not_ean13")
+    private Boolean skipBarcodeNotEAN13;
+
+    @TableField("footer_summary_mode")
+    private FooterSummaryMode footerSummaryMode;
 
     @TableField("remark")
     private String remark;

@@ -9,6 +9,8 @@ import java.math.BigDecimal;
 @Setter
 public class InvoiceCleanRow {
 
+    /** 该行在原始发票中的行号（1-based），用于预览定位与排序。 */
+    private int sourceRowIndex;
     private String barcode;
     private String chineseName;
     private String foreignName;

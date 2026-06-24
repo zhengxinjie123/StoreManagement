@@ -1,6 +1,7 @@
 package com.joao.storemanagement.controller.primary;
 
 import com.joao.storemanagement.dto.primary.BatchUploadSupplierMatchDTO;
+import com.joao.storemanagement.dto.primary.InvoiceCleanConfirmDTO;
 import com.joao.storemanagement.dto.response.ApiResponse;
 import com.joao.storemanagement.enums.AttachmentOwner;
 import com.joao.storemanagement.enums.CleanStatus;
@@ -132,7 +133,7 @@ public class ImportAttachmentController {
         }
     }
 
-    @Operation(summary = "清洗电子发票")
+    @Operation(summary = "清洗电子发票", description = "解析并直接归档，用于批量/一键清洗")
     @PostMapping("/{uuid}/clean")
     public ApiResponse<InvoiceArchiveVO> clean(
             @PathVariable @NotBlank(message = "uuid 不能为空") String uuid,
@@ -142,6 +143,18 @@ public class ImportAttachmentController {
             return ApiResponse.ok("清洗成功", invoiceCleanService.clean(uuid, supplierGuid, templateId));
         } catch (BusinessException ex) {
             return ApiResponse.operationFail("清洗电子发票", ex);
+        }
+    }
+
+    @Operation(summary = "确认归档清洗结果", description = "预览编辑后确认，写入归档表")
+    @PostMapping("/{uuid}/clean/confirm")
+    public ApiResponse<InvoiceArchiveVO> confirmClean(
+            @PathVariable @NotBlank(message = "uuid 不能为空") String uuid,
+            @Valid @RequestBody InvoiceCleanConfirmDTO form) {
+        try {
+            return ApiResponse.ok("归档成功", invoiceCleanService.confirmArchive(uuid, form));
+        } catch (BusinessException ex) {
+            return ApiResponse.operationFail("归档清洗结果", ex);
         }
     }
 }

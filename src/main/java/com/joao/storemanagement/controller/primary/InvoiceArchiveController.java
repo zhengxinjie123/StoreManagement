@@ -3,7 +3,9 @@ package com.joao.storemanagement.controller.primary;
 import com.joao.storemanagement.dto.response.ApiResponse;
 import com.joao.storemanagement.exceptions.BusinessException;
 import com.joao.storemanagement.service.primary.InvoiceArchiveService;
+import com.joao.storemanagement.utils.ExcelPreviewReader;
 import com.joao.storemanagement.vo.primary.DownloadFileVO;
+import com.joao.storemanagement.vo.primary.ExcelPreviewVO;
 import com.joao.storemanagement.vo.primary.InvoiceArchiveSupplierVO;
 import com.joao.storemanagement.vo.primary.InvoiceArchiveVO;
 import com.joao.storemanagement.vo.response.PageResponseVO;
@@ -68,6 +70,17 @@ public class InvoiceArchiveController {
         } catch (Exception ex) {
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.fail(com.joao.storemanagement.exceptions.FailureMessages.format("下载归档发票", ex.getMessage())));
+        }
+    }
+
+    @Operation(summary = "预览归档发票 Excel")
+    @GetMapping("/{uuid}/preview")
+    public ApiResponse<ExcelPreviewVO> preview(@PathVariable @NotBlank(message = "uuid 不能为空") String uuid) {
+        try {
+            DownloadFileVO file = invoiceArchiveService.getDownloadFile(uuid);
+            return ApiResponse.ok(ExcelPreviewReader.read(file.getPath(), file.getFilename()));
+        } catch (BusinessException ex) {
+            return ApiResponse.operationFail("预览归档发票", ex);
         }
     }
 
