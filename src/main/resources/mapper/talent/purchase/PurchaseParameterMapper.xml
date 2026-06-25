@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.talent.purchase.mapper.PurchaseParameterMapper">
+
+    <select id="selectStringValue" resultType="java.lang.String">
+        SELECT StringValue
+        FROM dbo.Parameters
+        WHERE Name = #{name}
+    </select>
+
+    <select id="selectIntValue" resultType="java.lang.Integer">
+        SELECT IntValue
+        FROM dbo.Parameters
+        WHERE Name = #{name}
+    </select>
+
+    <select id="selectBoolValue" resultType="java.lang.Boolean">
+        SELECT BoolValue
+        FROM dbo.Parameters
+        WHERE Name = #{name}
+    </select>
+
+    <update id="updateStringValue">
+        UPDATE dbo.Parameters
+        SET StringValue = #{value}
+        WHERE Name = #{name}
+    </update>
+
+</mapper>

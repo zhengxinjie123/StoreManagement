@@ -3,6 +3,7 @@ package com.joao.storemanagement.exceptions;
 import com.joao.storemanagement.dto.response.ApiResponse;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -20,7 +21,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
         String reason = ex.getBindingResult().getFieldErrors().stream()
                 .findFirst()
-                .map(error -> error.getDefaultMessage())
+                .map(DefaultMessageSourceResolvable::getDefaultMessage)
                 .orElse("请求参数错误");
         log.error("请求参数校验失败: {}", reason);
         return ResponseEntity.badRequest()
@@ -32,6 +33,13 @@ public class GlobalExceptionHandler {
         log.error("请求参数约束失败", ex);
         return ResponseEntity.badRequest()
                 .body(ApiResponse.fail(400, FailureMessages.format("参数校验", ex.getMessage())));
+    }
+
+    @ExceptionHandler(com.joao.storemanagement.talent.purchase.exception.ImportRowException.class)
+    public ResponseEntity<ApiResponse<Void>> handleImportRow(
+            com.joao.storemanagement.talent.purchase.exception.ImportRowException ex) {
+        log.error("采购入库行校验失败: {}", ex.toFriendlyMessage());
+        return ResponseEntity.badRequest().body(ApiResponse.fail(400, ex.toFriendlyMessage()));
     }
 
     @ExceptionHandler(BusinessException.class)

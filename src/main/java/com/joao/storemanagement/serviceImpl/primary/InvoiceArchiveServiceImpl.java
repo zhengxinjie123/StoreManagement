@@ -22,7 +22,6 @@ import com.joao.storemanagement.vo.primary.InvoiceArchiveVO;
 import com.joao.storemanagement.vo.primary.InvoiceCleanSummaryVO;
 import com.joao.storemanagement.vo.response.PageResponseVO;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -48,9 +47,6 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
     private final ImportAttachmentMapper importAttachmentMapper;
     private final TalentOposDataSourceService talentOposDataSourceService;
     private final StoreProperties storeProperties;
-
-    @Value("${store.upload.invoice-archive-dir:uploads/invoice-archives}")
-    private String archiveDir;
 
     @Override
     public PageResponseVO<InvoiceArchiveVO> page(long current, long pageSize, String supplierGuid) {
@@ -206,7 +202,7 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
     }
 
     private Path resolveAbsolutePath(String relativePath) {
-        return Path.of(archiveDir).resolve(relativePath).normalize();
+        return Path.of(storeProperties.getUpload().getInvoiceArchiveDir()).resolve(relativePath).normalize();
     }
 
     private String relativePath(String supplierGuid, String uuid, String extensionName) {
@@ -230,11 +226,6 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
         boolean deletable = attachment == null || ImportStatus.SUCCESS != attachment.getImportStatus();
         AttachmentOwner ownerType = attachment == null ? null : attachment.getOwnerType();
         return InvoiceArchiveVO.of(archive, deletable, ownerType);
-    }
-
-    private boolean isDeletable(String attachmentUuid) {
-        ImportAttachment attachment = findAttachment(attachmentUuid);
-        return attachment == null || ImportStatus.SUCCESS != attachment.getImportStatus();
     }
 
     private ImportAttachment findAttachment(String attachmentUuid) {
@@ -359,6 +350,7 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
         if (archive == null) {
             archive = invoiceArchiveMapper.selectOne(Wrappers.lambdaQuery(InvoiceArchive.class)
                     .eq(InvoiceArchive::getUuid, normalized)
+                    .orderByAsc(InvoiceArchive::getCreatedAt)
                     .last("OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY"));
         }
         if (archive == null) {

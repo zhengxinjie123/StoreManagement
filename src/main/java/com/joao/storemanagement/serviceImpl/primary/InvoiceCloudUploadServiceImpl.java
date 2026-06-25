@@ -16,7 +16,6 @@ import com.joao.storemanagement.service.primary.InvoiceCloudUploadService;
 import com.joao.storemanagement.utils.GuidHelper;
 import com.joao.storemanagement.vo.primary.InvoiceArchiveVO;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -52,14 +51,13 @@ public class InvoiceCloudUploadServiceImpl implements InvoiceCloudUploadService 
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${store.upload.invoice-archive-dir:uploads/invoice-archives}")
-    private String archiveDir;
-
     @Override
     public InvoiceArchiveVO uploadArchiveToGoogleDrive(String attachmentUuid) {
         ImportAttachment attachment = requireParentAttachment(attachmentUuid);
         InvoiceArchive archive = requireArchive(attachmentUuid);
-        Path archivePath = Path.of(archiveDir).resolve(archive.getFilePath()).normalize();
+        Path archivePath = Path.of(storeProperties.getUpload().getInvoiceArchiveDir())
+                .resolve(archive.getFilePath())
+                .normalize();
         if (!Files.exists(archivePath)) {
             throw new BusinessException("归档文件不存在: " + archive.getFileName());
         }
@@ -187,7 +185,9 @@ public class InvoiceCloudUploadServiceImpl implements InvoiceCloudUploadService 
         if (StrUtil.isBlank(accessToken)) {
             throw new BusinessException("刷新 Google access_token 失败");
         }
-        updateTokenFile(config.getTokenPath(), token, response);
+        if (response != null) {
+            updateTokenFile(config.getTokenPath(), token, response);
+        }
         return accessToken;
     }
 

@@ -2,34 +2,49 @@ package com.joao.storemanagement.serviceImpl.talent;
 
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
-import com.baomidou.mybatisplus.core.MybatisSqlSessionFactoryBuilder;
+import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.joao.storemanagement.dto.talent.DataSourceDTO;
 import com.joao.storemanagement.entity.primary.TalentDataSourceConfig;
 import com.joao.storemanagement.entity.talent.Supplier;
 import com.joao.storemanagement.exceptions.BusinessException;
 import com.joao.storemanagement.mapper.primary.TalentDataSourceConfigMapper;
+import com.joao.storemanagement.config.AppConfigOptionSource;
 import com.joao.storemanagement.mapper.talent.ProductMapper;
 import com.joao.storemanagement.mapper.talent.SupplierMapper;
+import com.joao.storemanagement.mapper.talent.TalentReferenceMapper;
 import com.joao.storemanagement.security.TextEncryptor;
+import com.joao.storemanagement.service.primary.AppConfigService;
 import com.joao.storemanagement.service.talent.TalentOposDataSourceService;
+import com.joao.storemanagement.talent.purchase.mapper.PurchaseDetailMapper;
+import com.joao.storemanagement.talent.purchase.mapper.PurchaseHeaderMapper;
+import com.joao.storemanagement.talent.purchase.mapper.PurchaseInventoryMapper;
+import com.joao.storemanagement.talent.purchase.mapper.PurchaseParameterMapper;
+import com.joao.storemanagement.talent.purchase.mapper.PurchaseProductMapper;
+import com.joao.storemanagement.talent.purchase.mapper.PurchaseProductTypeMapper;
+import com.joao.storemanagement.talent.purchase.mapper.PurchaseSupplierMapper;
+import com.joao.storemanagement.talent.purchase.mapper.PurchaseSupplierTypeMapper;
+import com.joao.storemanagement.talent.purchase.mapper.PurchaseTaxMapper;
+import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import com.joao.storemanagement.utils.GuidHelper;
 import com.joao.storemanagement.vo.talent.DataSourceStatusVO;
+import com.joao.storemanagement.vo.talent.TalentReferenceOptionVO;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.ibatis.mapping.Environment;
-import org.apache.ibatis.session.SqlSessionFactory;
-import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 @Slf4j
 @Service
@@ -40,14 +55,12 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
     private static final String DRIVER_CLASS = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
 
     private final TalentDataSourceConfigMapper talentDataSourceConfigMapper;
+    private final AppConfigService appConfigService;
 
     private volatile HikariDataSource dataSource;
     private volatile SqlSessionFactory sqlSessionFactory;
     private volatile DataSourceDTO config;
     private volatile LocalDateTime lastAppliedAt;
-
-    @Value("${store.security.datasource-config-key}")
-    private String datasourceConfigKey;
 
     @PostConstruct
     public void initFromSavedConfig() {
@@ -160,6 +173,47 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
     }
 
     @Override
+    public List<TalentReferenceOptionVO> listReferenceOptions(String type) {
+        if (StrUtil.isBlank(type)) {
+            throw new BusinessException("参考数据类型不能为空");
+        }
+        String optionType = type.trim();
+        if (AppConfigOptionSource.SUPPLIER.equals(optionType)) {
+            return listSupplierReferenceOptions();
+        }
+        try (var session = currentSqlSessionFactory().openSession()) {
+            return queryReferenceOptions(session.getMapper(TalentReferenceMapper.class), optionType);
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BusinessException("查询 TALENT 参考数据失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    @Override
+    public Map<String, List<TalentReferenceOptionVO>> listReferenceOptionMap() {
+        Map<String, List<TalentReferenceOptionVO>> result = new LinkedHashMap<>();
+        try (var session = currentSqlSessionFactory().openSession()) {
+            TalentReferenceMapper mapper = session.getMapper(TalentReferenceMapper.class);
+            putReferenceOptions(result, AppConfigOptionSource.PRODUCT_TYPE, mapper);
+            putReferenceOptions(result, AppConfigOptionSource.PRODUCT_UNIT, mapper);
+            putReferenceOptions(result, AppConfigOptionSource.PRODUCT_UNIT_NAME, mapper);
+            putReferenceOptions(result, AppConfigOptionSource.DEPOT, mapper);
+            putReferenceOptions(result, AppConfigOptionSource.LABEL_STYLE, mapper);
+            putReferenceOptions(result, AppConfigOptionSource.PRODUCT_LABEL_STYLE, mapper);
+            putReferenceOptions(result, AppConfigOptionSource.EMPLOYEE, mapper);
+            putReferenceOptions(result, AppConfigOptionSource.USER, mapper);
+            putReferenceOptions(result, AppConfigOptionSource.SUPPLIER_TYPE, mapper);
+        } catch (BusinessException ex) {
+            log.warn("加载 TALENT 参考数据失败: {}", ex.getMessage());
+        } catch (Exception ex) {
+            log.warn("加载 TALENT 参考数据失败", ex);
+        }
+        putReferenceOptions(result, AppConfigOptionSource.SUPPLIER, this::listSupplierReferenceOptions);
+        return result;
+    }
+
+    @Override
     public String validateSupplier(String supplierGuid) {
         if (StrUtil.isBlank(supplierGuid)) {
             throw new BusinessException("supplierGuid 不能为空");
@@ -169,6 +223,24 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
             throw new BusinessException("供应商不存在: " + supplierGuid);
         }
         return supplierGuid;
+    }
+
+    @Override
+    public <T> T executeInWriteTransaction(Function<SqlSession, T> action) {
+        try (SqlSession session = currentSqlSessionFactory().openSession(false)) {
+            try {
+                T result = action.apply(session);
+                session.commit();
+                return result;
+            } catch (RuntimeException ex) {
+                session.rollback();
+                throw ex;
+            }
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BusinessException("TALENTOPOS 写操作失败: " + ex.getMessage(), ex);
+        }
     }
 
     private void requireForm(DataSourceDTO form) {
@@ -231,12 +303,106 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
     }
 
     private SqlSessionFactory createSqlSessionFactory(HikariDataSource dataSource) {
-        MybatisConfiguration configuration = new MybatisConfiguration();
-        configuration.setMapUnderscoreToCamelCase(true);
-        configuration.setEnvironment(new Environment("talentopos", new JdbcTransactionFactory(), dataSource));
+        try {
+            MybatisSqlSessionFactoryBean factoryBean = new MybatisSqlSessionFactoryBean();
+            factoryBean.setDataSource(dataSource);
+            factoryBean.setMapperLocations(new PathMatchingResourcePatternResolver()
+                    .getResources("classpath:mapper/talent/purchase/**/*.xml"));
+
+            MybatisConfiguration configuration = new MybatisConfiguration();
+            configuration.setMapUnderscoreToCamelCase(true);
+            registerMappers(configuration);
+            factoryBean.setConfiguration(configuration);
+            factoryBean.afterPropertiesSet();
+            return factoryBean.getObject();
+        } catch (Exception ex) {
+            throw new IllegalStateException("创建 TALENTOPOS SqlSessionFactory 失败", ex);
+        }
+    }
+
+    private List<TalentReferenceOptionVO> listSupplierReferenceOptions() {
+        return listSuppliers().stream()
+                .map(supplier -> TalentReferenceOptionVO.builder()
+                        .value(supplier.getGuid())
+                        .code(supplier.getGuid())
+                        .label(buildSupplierLabel(supplier))
+                        .build())
+                .toList();
+    }
+
+    private void putReferenceOptions(
+            Map<String, List<TalentReferenceOptionVO>> result,
+            String type,
+            java.util.function.Supplier<List<TalentReferenceOptionVO>> loader) {
+        try {
+            result.put(type, loader.get());
+        } catch (BusinessException ex) {
+            log.warn("加载 TALENT 参考数据 {} 失败: {}", type, ex.getMessage());
+            result.put(type, List.of());
+        } catch (Exception ex) {
+            log.warn("加载 TALENT 参考数据 {} 失败", type, ex);
+            result.put(type, List.of());
+        }
+    }
+
+    private void putReferenceOptions(
+            Map<String, List<TalentReferenceOptionVO>> result,
+            String type,
+            TalentReferenceMapper mapper) {
+        try {
+            result.put(type, queryReferenceOptions(mapper, type));
+        } catch (BusinessException ex) {
+            log.warn("加载 TALENT 参考数据 {} 失败: {}", type, ex.getMessage());
+            result.put(type, List.of());
+        } catch (Exception ex) {
+            log.warn("加载 TALENT 参考数据 {} 失败", type, ex);
+            result.put(type, List.of());
+        }
+    }
+
+    private static String buildSupplierLabel(Supplier supplier) {
+        String chinese = StrUtil.trimToEmpty(supplier.getChineseName());
+        String foreign = StrUtil.trimToEmpty(supplier.getForeignName());
+        if (StrUtil.isNotBlank(chinese) && StrUtil.isNotBlank(foreign)) {
+            return chinese + " / " + foreign;
+        }
+        if (StrUtil.isNotBlank(chinese)) {
+            return chinese;
+        }
+        if (StrUtil.isNotBlank(foreign)) {
+            return foreign;
+        }
+        return supplier.getGuid();
+    }
+
+    private static List<TalentReferenceOptionVO> queryReferenceOptions(TalentReferenceMapper mapper, String type) {
+        return switch (type) {
+            case AppConfigOptionSource.PRODUCT_TYPE -> mapper.listProductTypes();
+            case AppConfigOptionSource.PRODUCT_UNIT -> mapper.listProductUnits();
+            case AppConfigOptionSource.PRODUCT_UNIT_NAME -> mapper.listProductUnitNames();
+            case AppConfigOptionSource.DEPOT -> mapper.listDepots();
+            case AppConfigOptionSource.LABEL_STYLE -> mapper.listLabelStyles();
+            case AppConfigOptionSource.PRODUCT_LABEL_STYLE -> mapper.listProductLabelStyles();
+            case AppConfigOptionSource.EMPLOYEE -> mapper.listEmployees();
+            case AppConfigOptionSource.USER -> mapper.listUsers();
+            case AppConfigOptionSource.SUPPLIER_TYPE -> mapper.listSupplierTypes();
+            default -> throw new BusinessException("不支持的参考数据类型: " + type);
+        };
+    }
+
+    private static void registerMappers(MybatisConfiguration configuration) {
         configuration.addMapper(ProductMapper.class);
         configuration.addMapper(SupplierMapper.class);
-        return new MybatisSqlSessionFactoryBuilder().build(configuration);
+        configuration.addMapper(TalentReferenceMapper.class);
+        configuration.addMapper(PurchaseProductMapper.class);
+        configuration.addMapper(PurchaseParameterMapper.class);
+        configuration.addMapper(PurchaseProductTypeMapper.class);
+        configuration.addMapper(PurchaseSupplierMapper.class);
+        configuration.addMapper(PurchaseSupplierTypeMapper.class);
+        configuration.addMapper(PurchaseHeaderMapper.class);
+        configuration.addMapper(PurchaseDetailMapper.class);
+        configuration.addMapper(PurchaseInventoryMapper.class);
+        configuration.addMapper(PurchaseTaxMapper.class);
     }
 
     private void saveConfig(DataSourceDTO form) {
@@ -246,7 +412,7 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
                 .port(form.getPort())
                 .databaseName(form.getDatabaseName())
                 .username(form.getUsername())
-                .password(TextEncryptor.encrypt(form.getPassword(), datasourceConfigKey))
+                .password(TextEncryptor.encrypt(form.getPassword(), datasourceConfigKey()))
                 .updatedAt(lastAppliedAt)
                 .build();
         if (talentDataSourceConfigMapper.selectById(CONFIG_ID) == null) {
@@ -262,8 +428,12 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
         form.setPort(configEntity.getPort());
         form.setDatabaseName(configEntity.getDatabaseName());
         form.setUsername(configEntity.getUsername());
-        form.setPassword(TextEncryptor.decrypt(configEntity.getPassword(), datasourceConfigKey));
+        form.setPassword(TextEncryptor.decrypt(configEntity.getPassword(), datasourceConfigKey()));
         return form;
+    }
+
+    private String datasourceConfigKey() {
+        return appConfigService.getString("security.datasource-config-key", "store-management-local-key");
     }
 
     private void closeQuietly(HikariDataSource dataSource) {

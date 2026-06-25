@@ -12,7 +12,7 @@ import java.util.Arrays;
 import java.util.Base64;
 
 /**
- * 数据库热部署数据库密码加密类
+ * 文本加密工具，用于保存第三方数据库连接密码等敏感配置。
  */
 public final class TextEncryptor {
 
@@ -50,7 +50,7 @@ public final class TextEncryptor {
             return cipherText;
         }
         if (!cipherText.startsWith(PREFIX)) {
-            throw new IllegalStateException("拒绝读取明文密码，请重新保存数据源配置生成密文");
+            throw new IllegalStateException("密文格式不正确，无法解密");
         }
         try {
             byte[] payload = Base64.getDecoder().decode(cipherText.substring(PREFIX.length()));

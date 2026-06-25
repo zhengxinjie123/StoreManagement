@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.joao.storemanagement.config.StoreProperties;
 import com.joao.storemanagement.entity.primary.ImportAttachment;
 import com.joao.storemanagement.entity.talent.Supplier;
 import com.joao.storemanagement.enums.AttachmentExtension;
@@ -23,7 +24,6 @@ import com.joao.storemanagement.vo.primary.BatchUploadSupplierMatchVO;
 import com.joao.storemanagement.vo.primary.DownloadFileVO;
 import com.joao.storemanagement.vo.response.PageResponseVO;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -43,9 +43,7 @@ public class ImportAttachmentServiceImpl implements ImportAttachmentService {
     private final ImportAttachmentMapper importAttachmentMapper;
     private final InvoiceArchiveService invoiceArchiveService;
     private final SupplierFileNameMatcher supplierFileNameMatcher;
-
-    @Value("${store.upload.attachment-dir:uploads/import-attachments}")
-    private String attachmentDir;
+    private final StoreProperties storeProperties;
 
     @Override
     public PageResponseVO<AttachmentVO> page(long current, long pageSize, String supplierGuid,
@@ -224,7 +222,7 @@ public class ImportAttachmentServiceImpl implements ImportAttachmentService {
 
     private void saveFile(MultipartFile file, ImportAttachment attachment) {
         try {
-            Path targetDir = Path.of(attachmentDir);
+            Path targetDir = Path.of(storeProperties.getUpload().getAttachmentDir());
             Files.createDirectories(targetDir);
             Path targetPath = targetDir.resolve(attachment.getUuid() + "." + attachment.getExtensionName());
             Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
@@ -251,7 +249,8 @@ public class ImportAttachmentServiceImpl implements ImportAttachmentService {
     }
 
     private Path resolveAttachmentPath(ImportAttachment attachment) {
-        return Path.of(attachmentDir).resolve(attachment.getUuid() + "." + attachment.getExtensionName());
+        return Path.of(storeProperties.getUpload().getAttachmentDir())
+                .resolve(attachment.getUuid() + "." + attachment.getExtensionName());
     }
 
     private List<Supplier> listSuppliersQuietly() {

@@ -10,19 +10,20 @@ import com.joao.storemanagement.exceptions.BusinessException;
 import com.joao.storemanagement.service.primary.ImportAttachmentService;
 import com.joao.storemanagement.service.primary.InvoiceCleanService;
 import com.joao.storemanagement.service.primary.InvoiceCloudUploadService;
+import com.joao.storemanagement.service.talent.TalentPurchaseImportWorkflowService;
 import com.joao.storemanagement.vo.primary.AttachmentVO;
 import com.joao.storemanagement.vo.primary.BatchUploadResultVO;
 import com.joao.storemanagement.vo.primary.BatchUploadSupplierMatchVO;
 import com.joao.storemanagement.vo.primary.DownloadFileVO;
 import com.joao.storemanagement.vo.primary.InvoiceArchiveVO;
 import com.joao.storemanagement.vo.response.PageResponseVO;
+import com.joao.storemanagement.vo.talent.TalentPurchaseImportWorkflowVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -51,6 +52,7 @@ public class ImportAttachmentController {
     private final ImportAttachmentService importAttachmentService;
     private final InvoiceCleanService invoiceCleanService;
     private final InvoiceCloudUploadService invoiceCloudUploadService;
+    private final TalentPurchaseImportWorkflowService talentPurchaseImportWorkflowService;
 
     @Operation(summary = "分页查询电子发票")
     @GetMapping("/getPage")
@@ -168,6 +170,19 @@ public class ImportAttachmentController {
             return ApiResponse.ok("上传谷歌云端成功", invoiceCloudUploadService.uploadArchiveToGoogleDrive(uuid));
         } catch (BusinessException ex) {
             return ApiResponse.operationFail("上传谷歌云端", ex);
+        }
+    }
+
+    @Operation(summary = "导入自己的发票到 TALENTOPOS", description = "未归档时可按模板先清洗归档，再写入当前热配置 TALENTOPOS；父母发票不走该接口")
+    @PostMapping("/{uuid}/import-talent")
+    public ApiResponse<TalentPurchaseImportWorkflowVO> importTalent(
+            @PathVariable @NotBlank(message = "uuid 不能为空") String uuid,
+            @RequestParam(required = false) Long templateId) {
+        try {
+            return ApiResponse.ok("导入 TALENTOPOS 成功",
+                    talentPurchaseImportWorkflowService.importAttachment(uuid, templateId));
+        } catch (BusinessException ex) {
+            return ApiResponse.operationFail("导入 TALENTOPOS", ex);
         }
     }
 }

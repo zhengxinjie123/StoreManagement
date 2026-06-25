@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.talent.purchase.mapper.PurchaseProductMapper">
+
+    <select id="selectByBarcode" resultType="com.joao.storemanagement.talent.purchase.entity.Product">
+        SELECT TOP 1
+            CAST(p.GUID AS varchar(36)) AS guid,
+            CAST(p.TypeGUID AS varchar(36)) AS typeGuid,
+            CAST(p.ProductUnitGUID AS varchar(36)) AS productUnitGuid,
+            CAST(p.DefaultSupplierGUID AS varchar(36)) AS defaultSupplierGuid,
+            CAST(p.DefaultDepotGUID AS varchar(36)) AS defaultDepotGuid,
+            p.[No] AS [no],
+            p.Barcode AS barcode,
+            p.[Name] AS [name],
+            p.NameP AS nameP,
+            p.Combinable AS combinable,
+            p.PackageQuantity AS packageQuantity,
+            p.QuantityBk AS quantityBk,
+            p.InvoiceQuantityBk AS invoiceQuantityBk,
+            p.PurchasePrice AS purchasePrice,
+            p.PurchasePriceTax AS purchasePriceTax,
+            p.TaxRate AS taxRate
+        FROM dbo.Products p
+        WHERE LTRIM(RTRIM(ISNULL(p.Barcode, ''))) = #{barcode}
+        ORDER BY p.UpdateTime DESC, p.GUID DESC
+    </select>
+
+    <select id="selectByProductNo" resultType="com.joao.storemanagement.talent.purchase.entity.Product">
+        SELECT TOP 1
+            CAST(p.GUID AS varchar(36)) AS guid,
+            CAST(p.TypeGUID AS varchar(36)) AS typeGuid,
+            CAST(p.ProductUnitGUID AS varchar(36)) AS productUnitGuid,
+            CAST(p.DefaultSupplierGUID AS varchar(36)) AS defaultSupplierGuid,
+            CAST(p.DefaultDepotGUID AS varchar(36)) AS defaultDepotGuid,
+            p.[No] AS [no],
+            p.Barcode AS barcode,
+            p.[Name] AS [name],
+            p.NameP AS nameP,
+            p.Combinable AS combinable,
+            p.PackageQuantity AS packageQuantity,
+            p.QuantityBk AS quantityBk,
+            p.InvoiceQuantityBk AS invoiceQuantityBk,
+            p.PurchasePrice AS purchasePrice,
+            p.PurchasePriceTax AS purchasePriceTax,
+            p.TaxRate AS taxRate
+        FROM dbo.Products p
+        WHERE p.[No] = #{productNo}
+        ORDER BY p.UpdateTime DESC, p.GUID DESC
+    </select>
+
+    <select id="selectMaxProductNoByExactLength" resultType="java.lang.String">
+        SELECT TOP 1 p.[No]
+        FROM dbo.Products p
+        WHERE LEN(p.[No]) = #{codeLength}
+          AND (#{prefixLen} = 0 OR LEFT(p.[No], #{prefixLen}) = #{prefix})
+          AND SUBSTRING(p.[No], #{prefixLen} + 1, #{codeLength} - #{prefixLen}) NOT LIKE '%[^0-9]%'
+        ORDER BY CAST(SUBSTRING(p.[No], #{prefixLen} + 1, #{codeLength} - #{prefixLen}) AS BIGINT) DESC
+    </select>
+</mapper>

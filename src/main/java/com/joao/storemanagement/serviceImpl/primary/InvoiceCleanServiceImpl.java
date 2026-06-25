@@ -10,6 +10,7 @@ import com.joao.storemanagement.category.invoiceclean.InvoiceCleanSupport;
 import com.joao.storemanagement.category.invoiceclean.InvoiceFilteredRow;
 import com.joao.storemanagement.category.invoiceclean.InvoiceFooterSummary;
 import com.joao.storemanagement.category.invoiceclean.InvoiceParseResult;
+import com.joao.storemanagement.config.StoreProperties;
 import com.joao.storemanagement.dto.primary.InvoiceCleanConfirmDTO;
 import com.joao.storemanagement.entity.primary.ImportAttachment;
 import com.joao.storemanagement.entity.primary.InvoiceTemplate;
@@ -27,7 +28,6 @@ import com.joao.storemanagement.vo.primary.InvoiceCleanPreviewVO;
 import com.joao.storemanagement.vo.primary.InvoiceCleanSummaryVO;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -47,9 +47,7 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
     private final InvoiceTemplateService invoiceTemplateService;
     private final InvoiceArchiveService invoiceArchiveService;
     private final InvoiceCleanStrategyFactory strategyFactory;
-
-    @Value("${store.upload.attachment-dir:uploads/import-attachments}")
-    private String attachmentDir;
+    private final StoreProperties storeProperties;
 
     @Override
     public InvoiceArchiveVO clean(String attachmentUuid, String supplierGuid, Long templateId) {
@@ -217,7 +215,7 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
 
         InvoiceTemplate template = invoiceTemplateService.requireTemplateForSupplier(templateId, supplierGuid);
         boolean taxIncluded = invoiceTemplateService.isTaxIncluded(template);
-        Path sourceFile = Path.of(attachmentDir)
+        Path sourceFile = Path.of(storeProperties.getUpload().getAttachmentDir())
                 .resolve(attachment.getUuid() + "." + attachment.getExtensionName());
         if (!Files.exists(sourceFile)) {
             throw new BusinessException("电子发票文件不存在: " + attachment.getFileName());
