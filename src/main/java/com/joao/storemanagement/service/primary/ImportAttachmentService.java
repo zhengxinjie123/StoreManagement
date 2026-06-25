@@ -53,4 +53,9 @@ public interface ImportAttachmentService {
      * 标记电子发票为已清洗。
      */
     void markCleaned(String uuid);
+
+    /**
+     * 标记电子发票为已导入。
+     */
+    void markImported(String uuid);
 }

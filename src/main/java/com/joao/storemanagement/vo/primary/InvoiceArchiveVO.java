@@ -1,6 +1,7 @@
 package com.joao.storemanagement.vo.primary;
 
 import com.joao.storemanagement.entity.primary.InvoiceArchive;
+import com.joao.storemanagement.enums.AttachmentOwner;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -26,9 +27,13 @@ public class InvoiceArchiveVO {
     private final Boolean taxIncluded;
     private final LocalDateTime createdAt;
     private final String remark;
+    private final AttachmentOwner ownerType;
+    private final Integer ownerTypeCode;
+    private final String ownerTypeName;
     private final boolean deletable;
 
-    public static InvoiceArchiveVO of(InvoiceArchive entity, boolean deletable) {
+    public static InvoiceArchiveVO of(InvoiceArchive entity, boolean deletable, AttachmentOwner ownerType) {
+        AttachmentOwner owner = ownerType == null ? AttachmentOwner.SELF : ownerType;
         return InvoiceArchiveVO.builder()
                 .uuid(entity.getUuid())
                 .attachmentUuid(entity.getAttachmentUuid())
@@ -45,6 +50,9 @@ public class InvoiceArchiveVO {
                 .taxIncluded(entity.getTaxIncluded())
                 .createdAt(entity.getCreatedAt())
                 .remark(entity.getRemark())
+                .ownerType(owner)
+                .ownerTypeCode(owner.getCode())
+                .ownerTypeName(owner.getDescription())
                 .deletable(deletable)
                 .build();
     }

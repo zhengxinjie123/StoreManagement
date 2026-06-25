@@ -34,6 +34,15 @@ store:
     default-tax-rate: 23
   archive:
     max-name-suffix-attempts: 1000
+  google-drive:
+    enabled: ${GOOGLE_DRIVE_ENABLED:false}
+    client-id: ${GOOGLE_DRIVE_CLIENT_ID:}
+    client-secret: ${GOOGLE_DRIVE_CLIENT_SECRET:}
+    token-path: ${GOOGLE_DRIVE_TOKEN_PATH:}
+    folder-name: xx
+    folder-id: ${GOOGLE_DRIVE_FOLDER_ID:}
+
+
   upload:
     attachment-dir: uploads/import-attachments
     invoice-archive-dir: uploads/invoice-archives

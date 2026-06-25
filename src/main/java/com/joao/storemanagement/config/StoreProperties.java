@@ -15,6 +15,7 @@ public class StoreProperties {
 
     private Invoice invoice = new Invoice();
     private Archive archive = new Archive();
+    private GoogleDrive googleDrive = new GoogleDrive();
 
     @Getter
     @Setter
@@ -26,5 +27,16 @@ public class StoreProperties {
     @Setter
     public static class Archive {
         private int maxNameSuffixAttempts = 1000;
+    }
+
+    @Getter
+    @Setter
+    public static class GoogleDrive {
+        private boolean enabled = false;
+        private String clientId;
+        private String clientSecret;
+        private String tokenPath;
+        private String folderName = "Fatura";
+        private String folderId;
     }
 }

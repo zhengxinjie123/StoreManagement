@@ -9,6 +9,7 @@ import com.joao.storemanagement.enums.ImportStatus;
 import com.joao.storemanagement.exceptions.BusinessException;
 import com.joao.storemanagement.service.primary.ImportAttachmentService;
 import com.joao.storemanagement.service.primary.InvoiceCleanService;
+import com.joao.storemanagement.service.primary.InvoiceCloudUploadService;
 import com.joao.storemanagement.vo.primary.AttachmentVO;
 import com.joao.storemanagement.vo.primary.BatchUploadResultVO;
 import com.joao.storemanagement.vo.primary.BatchUploadSupplierMatchVO;
@@ -49,6 +50,7 @@ public class ImportAttachmentController {
 
     private final ImportAttachmentService importAttachmentService;
     private final InvoiceCleanService invoiceCleanService;
+    private final InvoiceCloudUploadService invoiceCloudUploadService;
 
     @Operation(summary = "分页查询电子发票")
     @GetMapping("/getPage")
@@ -155,6 +157,17 @@ public class ImportAttachmentController {
             return ApiResponse.ok("归档成功", invoiceCleanService.confirmArchive(uuid, form));
         } catch (BusinessException ex) {
             return ApiResponse.operationFail("归档清洗结果", ex);
+        }
+    }
+
+    @Operation(summary = "上传归档发票到 Google Drive", description = "父母发票清洗归档后上传到 Fatura 文件夹")
+    @PostMapping("/{uuid}/upload-google-drive")
+    public ApiResponse<InvoiceArchiveVO> uploadGoogleDrive(
+            @PathVariable @NotBlank(message = "uuid 不能为空") String uuid) {
+        try {
+            return ApiResponse.ok("上传谷歌云端成功", invoiceCloudUploadService.uploadArchiveToGoogleDrive(uuid));
+        } catch (BusinessException ex) {
+            return ApiResponse.operationFail("上传谷歌云端", ex);
         }
     }
 }

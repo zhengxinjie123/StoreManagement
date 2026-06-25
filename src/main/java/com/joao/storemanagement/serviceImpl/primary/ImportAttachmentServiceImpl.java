@@ -196,6 +196,17 @@ public class ImportAttachmentServiceImpl implements ImportAttachmentService {
         importAttachmentMapper.updateById(attachment);
     }
 
+    @Override
+    public void markImported(String uuid) {
+        requireUuid(uuid);
+        ImportAttachment attachment = importAttachmentMapper.selectById(uuid);
+        if (attachment == null) {
+            throw new BusinessException("附件不存在: " + uuid);
+        }
+        attachment.setImportStatus(ImportStatus.SUCCESS);
+        importAttachmentMapper.updateById(attachment);
+    }
+
     private ImportAttachment buildAttachment(MultipartFile file, String supplierGuid, AttachmentOwner ownerType) {
         String originalFilename = StrUtil.blankToDefault(file.getOriginalFilename(), "unknown");
         return ImportAttachment.builder()

@@ -8,6 +8,7 @@ import com.joao.storemanagement.config.StoreProperties;
 import com.joao.storemanagement.entity.primary.ImportAttachment;
 import com.joao.storemanagement.entity.primary.InvoiceArchive;
 import com.joao.storemanagement.entity.talent.Supplier;
+import com.joao.storemanagement.enums.AttachmentOwner;
 import com.joao.storemanagement.enums.ImportStatus;
 import com.joao.storemanagement.exceptions.BusinessException;
 import com.joao.storemanagement.mapper.primary.ImportAttachmentMapper;
@@ -120,10 +121,11 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
                                         String extensionName, int rowCount,
                                         InvoiceCleanSummaryVO summary) throws IOException {
         String ext = StrUtil.blankToDefault(extensionName, "xlsx").toLowerCase();
+        ImportAttachment attachment = requireAttachment(attachmentUuid);
         InvoiceArchive existing = findByAttachmentUuid(attachmentUuid);
         LocalDateTime archiveTime = LocalDateTime.now();
         String excludeUuid = existing != null ? existing.getUuid() : null;
-        String fileName = buildArchiveFileName(supplierGuid, archiveTime, excludeUuid);
+        String fileName = buildArchiveFileName(supplierGuid, attachment, archiveTime, excludeUuid);
 
         if (existing != null) {
             Path target = resolveAbsolutePath(existing.getFilePath());
@@ -224,7 +226,10 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
     }
 
     private InvoiceArchiveVO toVO(InvoiceArchive archive) {
-        return InvoiceArchiveVO.of(archive, isDeletable(archive.getAttachmentUuid()));
+        ImportAttachment attachment = findAttachment(archive.getAttachmentUuid());
+        boolean deletable = attachment == null || ImportStatus.SUCCESS != attachment.getImportStatus();
+        AttachmentOwner ownerType = attachment == null ? null : attachment.getOwnerType();
+        return InvoiceArchiveVO.of(archive, deletable, ownerType);
     }
 
     private boolean isDeletable(String attachmentUuid) {
@@ -236,15 +241,23 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
         return importAttachmentMapper.selectById(GuidHelper.normalize(attachmentUuid));
     }
 
-    private String buildArchiveFileName(String supplierGuid, LocalDateTime createdAt, String excludeUuid) {
-        String baseName = sanitizeFileName(resolveSupplierDisplayName(supplierGuid) + " "
-                + ARCHIVE_MONTH.format(createdAt));
-        Set<String> usedNames = listUsedArchiveNames(supplierGuid, createdAt, excludeUuid);
-        if (!usedNames.contains(baseName)) {
-            return baseName;
+    private ImportAttachment requireAttachment(String attachmentUuid) {
+        ImportAttachment attachment = findAttachment(attachmentUuid);
+        if (attachment == null) {
+            throw new BusinessException("电子发票不存在: " + attachmentUuid);
         }
+        return attachment;
+    }
+
+    private String buildArchiveFileName(String supplierGuid, ImportAttachment attachment,
+                                        LocalDateTime createdAt, String excludeUuid) {
+        AttachmentOwner owner = attachment.getOwnerType() == null ? AttachmentOwner.SELF : attachment.getOwnerType();
+        String supplierName = resolveSupplierDisplayName(supplierGuid);
+        String month = ARCHIVE_MONTH.format(createdAt);
+        String baseName = sanitizeFileName(supplierName + " [" + owner.getDescription() + "] " + month);
+        Set<String> usedNames = listUsedArchiveNames(supplierGuid, createdAt, excludeUuid);
         int maxAttempts = storeProperties.getArchive().getMaxNameSuffixAttempts();
-        for (int index = 2; index < maxAttempts; index++) {
+        for (int index = 1; index < maxAttempts; index++) {
             String candidate = baseName + "-" + index;
             if (!usedNames.contains(candidate)) {
                 return candidate;

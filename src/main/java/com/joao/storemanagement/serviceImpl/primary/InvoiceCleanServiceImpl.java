@@ -130,7 +130,7 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
             throw new BusinessException("创建清洗输出文件失败: " + ex.getMessage(), ex);
         }
         try {
-            writeOutput(outputFile, rows);
+            writeOutput(outputFile, rows, Boolean.TRUE.equals(summary.getTaxIncluded()));
             InvoiceArchiveVO archive = invoiceArchiveService.register(
                     attachment.getUuid(),
                     attachment.getSupplierGuid(),
@@ -247,9 +247,9 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
         return new CleanResult(attachment, template, parseResult, summary, invoiceFooter, taxIncluded);
     }
 
-    private void writeOutput(Path outputFile, List<InvoiceCleanRow> rows) {
+    private void writeOutput(Path outputFile, List<InvoiceCleanRow> rows, boolean taxIncluded) {
         try (ExcelWriter writer = ExcelUtil.getWriter(true)) {
-            writer.writeHeadRow(List.of("条码", "外文名", "数量", "进价", "税率"));
+            writer.writeHeadRow(List.of("条码", "外文名", "数量", outputPriceHeader(taxIncluded), "税率"));
             for (InvoiceCleanRow row : rows) {
                 writer.writeRow(List.of(
                         row.getBarcode(),
@@ -262,6 +262,10 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
         } catch (Exception ex) {
             throw new BusinessException("写入清洗结果失败: " + ex.getMessage(), ex);
         }
+    }
+
+    private String outputPriceHeader(boolean taxIncluded) {
+        return taxIncluded ? "进价含税" : "进价不含税";
     }
 
     private Sheet resolveSheet(Sheet defaultSheet, String sheetName) {
