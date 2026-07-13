@@ -1,6 +1,6 @@
 package com.joao.storemanagement.utils;
 
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
 import com.joao.storemanagement.vo.primary.ExcelPreviewVO;
 import com.joao.storemanagement.vo.primary.ExcelSheetPreviewVO;
 import org.apache.poi.ss.usermodel.Cell;

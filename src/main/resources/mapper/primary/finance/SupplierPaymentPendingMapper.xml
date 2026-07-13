@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.mapper.primary.finance.SupplierPaymentPendingMapper">
+
+    <resultMap id="SupplierPaymentPendingMap" type="com.joao.storemanagement.entity.finance.SupplierPaymentPending">
+        <id property="id" column="id"/>
+        <result property="supplierName" column="supplier_name"/>
+        <result property="orderDate" column="order_date"/>
+        <result property="arrivalDate" column="arrival_date"/>
+        <result property="paymentMethod" column="payment_method"/>
+        <result property="paymentTerm" column="payment_term"/>
+        <result property="paymentTermCode" column="payment_term_code"/>
+        <result property="paymentDueDate" column="payment_due_date"/>
+        <result property="amount" column="amount"/>
+        <result property="remark" column="remark"/>
+        <result property="status" column="status"/>
+        <result property="paidDate" column="paid_date"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(1)
+        FROM supplier_payment_pending
+        <include refid="pageWhere"/>
+    </select>
+
+    <select id="selectPage" resultMap="SupplierPaymentPendingMap">
+        SELECT id, supplier_name, order_date, arrival_date, payment_method, payment_term, payment_term_code,
+               payment_due_date, amount, remark, status, paid_date, created_at, updated_at
+        FROM supplier_payment_pending
+        <include refid="pageWhere"/>
+        ORDER BY
+            CASE WHEN status = N'open' THEN 0 ELSE 1 END,
+            CASE WHEN payment_due_date IS NULL THEN 1 ELSE 0 END,
+            payment_due_date ASC,
+            order_date DESC,
+            id DESC
+        OFFSET #{offset} ROWS FETCH NEXT #{pageSize} ROWS ONLY
+    </select>
+
+    <sql id="pageWhere">
+        <where>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="supplierName != null and supplierName != ''">
+                AND supplier_name LIKE '%' + #{supplierName} + '%'
+            </if>
+            <if test="dueFrom != null">
+                AND payment_due_date &gt;= #{dueFrom}
+            </if>
+            <if test="dueTo != null">
+                AND payment_due_date &lt;= #{dueTo}
+            </if>
+            <if test="overdueStatus == 'overdue'">
+                AND status = N'open'
+                AND payment_due_date IS NOT NULL
+                AND payment_due_date &lt; CAST(GETDATE() AS DATE)
+            </if>
+            <if test="overdueStatus == 'due_soon'">
+                AND status = N'open'
+                AND payment_due_date IS NOT NULL
+                AND payment_due_date &gt;= CAST(GETDATE() AS DATE)
+                AND payment_due_date &lt;= DATEADD(day, 7, CAST(GETDATE() AS DATE))
+            </if>
+            <if test="overdueStatus == 'unknown'">
+                AND status = N'open'
+                AND payment_due_date IS NULL
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectById" resultMap="SupplierPaymentPendingMap">
+        SELECT id, supplier_name, order_date, arrival_date, payment_method, payment_term, payment_term_code,
+               payment_due_date, amount, remark, status, paid_date, created_at, updated_at
+        FROM supplier_payment_pending
+        WHERE id = #{id}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO supplier_payment_pending (
+            supplier_name, order_date, arrival_date, payment_method, payment_term, payment_term_code,
+            payment_due_date, amount, remark, status, paid_date
+        ) VALUES (
+            #{supplierName},
+            #{orderDate, jdbcType=DATE},
+            #{arrivalDate, jdbcType=DATE},
+            #{paymentMethod},
+            #{paymentTerm},
+            #{paymentTermCode},
+            #{paymentDueDate, jdbcType=DATE},
+            #{amount, jdbcType=DECIMAL},
+            #{remark},
+            #{status},
+            #{paidDate, jdbcType=DATE}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE supplier_payment_pending
+        SET supplier_name = #{supplierName},
+            order_date = #{orderDate, jdbcType=DATE},
+            arrival_date = #{arrivalDate, jdbcType=DATE},
+            payment_method = #{paymentMethod},
+            payment_term = #{paymentTerm},
+            payment_term_code = #{paymentTermCode},
+            payment_due_date = #{paymentDueDate, jdbcType=DATE},
+            amount = #{amount, jdbcType=DECIMAL},
+            remark = #{remark},
+            status = #{status},
+            paid_date = #{paidDate, jdbcType=DATE},
+            updated_at = SYSUTCDATETIME()
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM supplier_payment_pending WHERE id = #{id}
+    </delete>
+</mapper>
+

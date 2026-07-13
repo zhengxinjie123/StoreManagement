@@ -32,7 +32,12 @@ public interface TalentOposDataSourceService {
     String validateSupplier(String supplierGuid);
 
     /**
-     * 在 TALENTOPOS 写事务中执行操作（采购入库等）。
+     * 使用当前 TALENTOPOS 动态连接执行数据库操作。
+     */
+    <T> T executeInSession(Function<SqlSession, T> action);
+
+    /**
+     * 使用当前 TALENTOPOS 动态连接执行事务性数据库操作。
      */
     <T> T executeInWriteTransaction(Function<SqlSession, T> action);
 }

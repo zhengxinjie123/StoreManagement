@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.mapper.talent.PosPurchaseMapper">
+
+    <select id="selectPriceHistoryByBarcode" resultType="com.joao.storemanagement.dto.analytics.PriceHistoryDetailDTO">
+        SELECT
+            pu.[DateTime] AS purchaseDate,
+            pd.UnitPrice AS unitPrice,
+            pd.Quantity AS quantity,
+            pu.[No] AS purchaseNo,
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(purchaseSupplier.[Name])), ''),
+                NULLIF(LTRIM(RTRIM(purchaseSupplier.NameP)), ''),
+                NULLIF(LTRIM(RTRIM(defaultSupplier.[Name])), ''),
+                NULLIF(LTRIM(RTRIM(defaultSupplier.NameP)), '')
+            ) AS supplierName
+        FROM dbo.PurchaseDetails pd
+        INNER JOIN dbo.Purchases pu ON pu.GUID = pd.MasterGUID
+        LEFT JOIN dbo.Suppliers purchaseSupplier ON purchaseSupplier.GUID = pu.SupplierGUID
+        OUTER APPLY (
+            SELECT TOP 1 prod.DefaultSupplierGUID
+            FROM dbo.Products prod
+            WHERE LTRIM(RTRIM(ISNULL(prod.Barcode, ''))) = #{barcode}
+            ORDER BY prod.UpdateTime DESC, prod.GUID DESC
+        ) productRow
+        LEFT JOIN dbo.Suppliers defaultSupplier ON defaultSupplier.GUID = productRow.DefaultSupplierGUID
+        WHERE LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) = #{barcode}
+          AND pd.UnitPrice IS NOT NULL
+          AND pd.UnitPrice > 0
+        ORDER BY pu.[DateTime] ASC, pd.[No] ASC
+    </select>
+
+    <sql id="priceIncreaseAlertFrom">
+        WITH ranked AS (
+            SELECT
+                LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) AS barcode,
+                pd.[Name] AS purchaseNameChinese,
+                pd.NameP AS purchaseNameForeign,
+                pd.UnitPrice AS unitPrice,
+                pu.[DateTime] AS purchaseDate,
+                ROW_NUMBER() OVER (
+                    PARTITION BY LTRIM(RTRIM(ISNULL(pd.Barcode, '')))
+                    ORDER BY pu.[DateTime] DESC, pd.[No] DESC
+                ) AS rn_latest,
+                ROW_NUMBER() OVER (
+                    PARTITION BY LTRIM(RTRIM(ISNULL(pd.Barcode, '')))
+                    ORDER BY pu.[DateTime] ASC, pd.[No] ASC
+                ) AS rn_first,
+                COUNT(1) OVER (PARTITION BY LTRIM(RTRIM(ISNULL(pd.Barcode, '')))) AS purchase_count
+            FROM dbo.PurchaseDetails pd
+            INNER JOIN dbo.Purchases pu ON pu.GUID = pd.MasterGUID
+            WHERE LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) &lt;&gt; ''
+              AND pd.UnitPrice IS NOT NULL
+              AND pd.UnitPrice > 0
+        ),
+        latest AS (
+            SELECT
+                barcode,
+                purchaseNameChinese,
+                purchaseNameForeign,
+                unitPrice AS latestPrice,
+                purchaseDate AS latestPurchaseDate
+            FROM ranked WHERE rn_latest = 1
+        ),
+        previous AS (
+            SELECT barcode, unitPrice AS previousPrice
+            FROM ranked WHERE rn_latest = 2
+        )
+    </sql>
+
+    <sql id="priceIncreaseAlertWhere">
+        FROM latest l
+        INNER JOIN previous p ON p.barcode = l.barcode
+        OUTER APPLY (
+            SELECT TOP 1
+                prod.DefaultSupplierGUID,
+                prod.[Name] AS nameChinese,
+                prod.NameP AS nameForeign
+            FROM dbo.Products prod
+            WHERE LTRIM(RTRIM(ISNULL(prod.Barcode, ''))) = l.barcode
+            ORDER BY prod.UpdateTime DESC, prod.GUID DESC
+        ) productRow
+        LEFT JOIN dbo.Suppliers s ON s.GUID = productRow.DefaultSupplierGUID
+        WHERE ROUND(p.previousPrice, 2) > 0
+          AND ROUND(l.latestPrice, 2) > ROUND(p.previousPrice, 2)
+          AND (ROUND(l.latestPrice, 2) - ROUND(p.previousPrice, 2)) &gt;= #{minChangeAmount}
+        <if test="barcode != null and barcode != ''">
+          AND l.barcode LIKE '%' + #{barcode} + '%'
+        </if>
+        <if test="supplierName != null and supplierName != ''">
+          AND (
+              COALESCE(NULLIF(LTRIM(RTRIM(s.[Name])), ''), NULLIF(LTRIM(RTRIM(s.NameP)), ''))
+              LIKE '%' + #{supplierName} + '%'
+          )
+        </if>
+        <if test="fromPurchaseDate != null">
+          AND l.latestPurchaseDate &gt;= #{fromPurchaseDate}
+        </if>
+        <if test="toPurchaseDate != null">
+          AND l.latestPurchaseDate &lt; DATEADD(day, 1, CAST(#{toPurchaseDate} AS DATE))
+        </if>
+    </sql>
+
+    <select id="countPriceIncreaseAlerts" resultType="long">
+        <include refid="priceIncreaseAlertFrom"/>
+        SELECT COUNT(1)
+        <include refid="priceIncreaseAlertWhere"/>
+    </select>
+
+    <select id="selectPriceIncreaseAlerts" resultType="com.joao.storemanagement.dto.analytics.PriceIncreaseDTO">
+        <include refid="priceIncreaseAlertFrom"/>
+        SELECT
+            l.barcode,
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(productRow.nameChinese)), ''),
+                NULLIF(LTRIM(RTRIM(l.purchaseNameChinese)), '')
+            ) AS nameChinese,
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(productRow.nameForeign)), ''),
+                NULLIF(LTRIM(RTRIM(l.purchaseNameForeign)), '')
+            ) AS nameForeign,
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(s.[Name])), ''),
+                NULLIF(LTRIM(RTRIM(s.NameP)), '')
+            ) AS supplierName,
+            ROUND(p.previousPrice, 2) AS previousPrice,
+            ROUND(l.latestPrice, 2) AS latestPrice,
+            ROUND(ROUND(l.latestPrice, 2) - ROUND(p.previousPrice, 2), 2) AS changeAmount,
+            l.latestPurchaseDate
+        <include refid="priceIncreaseAlertWhere"/>
+        ORDER BY changeAmount DESC
+        OFFSET #{offset} ROWS FETCH NEXT #{pageSize} ROWS ONLY
+    </select>
+
+    <select id="selectPriceIncreaseAlertsForExport" resultType="com.joao.storemanagement.dto.analytics.PriceIncreaseDTO">
+        <include refid="priceIncreaseAlertFrom"/>
+        SELECT
+            l.barcode,
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(productRow.nameChinese)), ''),
+                NULLIF(LTRIM(RTRIM(l.purchaseNameChinese)), '')
+            ) AS nameChinese,
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(productRow.nameForeign)), ''),
+                NULLIF(LTRIM(RTRIM(l.purchaseNameForeign)), '')
+            ) AS nameForeign,
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(s.[Name])), ''),
+                NULLIF(LTRIM(RTRIM(s.NameP)), '')
+            ) AS supplierName,
+            ROUND(p.previousPrice, 2) AS previousPrice,
+            ROUND(l.latestPrice, 2) AS latestPrice,
+            ROUND(ROUND(l.latestPrice, 2) - ROUND(p.previousPrice, 2), 2) AS changeAmount,
+            l.latestPurchaseDate
+        <include refid="priceIncreaseAlertWhere"/>
+        ORDER BY changeAmount DESC
+    </select>
+
+    <select id="selectFullyReceivedBarcodes" resultType="java.lang.String">
+        SELECT DISTINCT LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) AS barcode
+        FROM dbo.PurchaseDetails pd
+        WHERE pd.Quantity IS NOT NULL
+          AND pd.CheckQuantity IS NOT NULL
+          AND pd.CheckQuantity = pd.Quantity
+          AND LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) &lt;&gt; ''
+          AND LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) IN
+        <foreach collection="barcodes" item="barcode" open="(" separator="," close=")">
+            #{barcode}
+        </foreach>
+    </select>
+
+    <select id="selectLatestPurchaseByBarcodes" resultType="com.joao.storemanagement.dto.talent.LatestPurchaseDTO">
+        WITH ranked AS (
+            SELECT
+                LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) AS barcode,
+                pu.[DateTime] AS purchaseDate,
+                COALESCE(NULLIF(LTRIM(RTRIM(s.[Name])), ''), NULLIF(LTRIM(RTRIM(s.NameP)), '')) AS supplierName,
+                ROW_NUMBER() OVER (
+                    PARTITION BY LTRIM(RTRIM(ISNULL(pd.Barcode, '')))
+                    ORDER BY pu.[DateTime] DESC, pd.[No] DESC
+                ) AS rn
+            FROM dbo.PurchaseDetails pd
+            INNER JOIN dbo.Purchases pu ON pu.GUID = pd.MasterGUID
+            LEFT JOIN dbo.Suppliers s ON s.GUID = pu.SupplierGUID
+            WHERE LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) &lt;&gt; ''
+              AND LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) IN
+            <foreach collection="barcodes" item="barcode" open="(" separator="," close=")">
+                #{barcode}
+            </foreach>
+        )
+        SELECT barcode, purchaseDate, supplierName
+        FROM ranked
+        WHERE rn = 1
+    </select>
+
+    <select id="selectLatestFullyReceivedPurchaseByBarcodes"
+            resultType="com.joao.storemanagement.dto.talent.LatestPurchaseDTO">
+        WITH ranked AS (
+            SELECT
+                LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) AS barcode,
+                pu.[DateTime] AS purchaseDate,
+                COALESCE(NULLIF(LTRIM(RTRIM(s.[Name])), ''), NULLIF(LTRIM(RTRIM(s.NameP)), '')) AS supplierName,
+                ROW_NUMBER() OVER (
+                    PARTITION BY LTRIM(RTRIM(ISNULL(pd.Barcode, '')))
+                    ORDER BY pu.[DateTime] DESC, pd.[No] DESC
+                ) AS rn
+            FROM dbo.PurchaseDetails pd
+            INNER JOIN dbo.Purchases pu ON pu.GUID = pd.MasterGUID
+            LEFT JOIN dbo.Suppliers s ON s.GUID = pu.SupplierGUID
+            WHERE LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) &lt;&gt; ''
+              AND pd.Quantity IS NOT NULL
+              AND pd.CheckQuantity IS NOT NULL
+              AND pd.CheckQuantity = pd.Quantity
+              AND LTRIM(RTRIM(ISNULL(pd.Barcode, ''))) IN
+            <foreach collection="barcodes" item="barcode" open="(" separator="," close=")">
+                #{barcode}
+            </foreach>
+        )
+        SELECT barcode, purchaseDate, supplierName
+        FROM ranked
+        WHERE rn = 1
+    </select>
+</mapper>

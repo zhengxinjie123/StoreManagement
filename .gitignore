@@ -1,4 +1,9 @@
 HELP.md
+
+### 编译产物 ###
+*.class
+/cn/
+
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
@@ -35,3 +40,6 @@ build/
 
 ### 附件 ###
 uploads/
+
+### 数据库备份 ###
+backups/

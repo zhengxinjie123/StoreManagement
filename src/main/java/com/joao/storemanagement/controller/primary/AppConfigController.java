@@ -2,7 +2,8 @@ package com.joao.storemanagement.controller.primary;
 
 import com.joao.storemanagement.dto.primary.AppConfigDTO;
 import com.joao.storemanagement.dto.response.ApiResponse;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
+import com.joao.storemanagement.security.RequireRole;
 import com.joao.storemanagement.service.primary.AppConfigService;
 import com.joao.storemanagement.vo.primary.AppConfigVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,6 +26,7 @@ import java.util.List;
 @Validated
 @RestController
 @RequestMapping("/api/appConfig")
+@RequireRole("ADMIN")
 @RequiredArgsConstructor
 @Tag(name = "系统参数配置", description = "系统参数表配置管理")
 public class AppConfigController {

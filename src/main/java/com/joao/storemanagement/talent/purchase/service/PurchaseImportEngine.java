@@ -15,7 +15,7 @@ import com.joao.storemanagement.talent.purchase.mapper.PurchaseHeaderMapper;
 import com.joao.storemanagement.talent.purchase.mapper.PurchaseInventoryMapper;
 import com.joao.storemanagement.talent.purchase.mapper.PurchaseParameterMapper;
 import com.joao.storemanagement.talent.purchase.mapper.PurchaseProductMapper;
-import com.joao.storemanagement.utils.BarcodeNormalizer;
+import com.joao.storemanagement.utils.BarcodeUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -175,7 +175,7 @@ public class PurchaseImportEngine {
 
     private boolean processRowInternal(
             Purchase purchase, ProductImportDTO row, int lineNo, LocalDateTime now, String supplierGuid) {
-        String barcode = BarcodeNormalizer.normalize(row.getBarcode());
+        String barcode = BarcodeUtil.judgeBarcode(row.getBarcode());
         row.setBarcode(barcode);
 
         Product product = findExistingProduct(barcode);
@@ -346,11 +346,7 @@ public class PurchaseImportEngine {
         purchase.setPremium(ZERO);
         purchase.setPayment(ZERO);
         purchase.setPaymentDate(now);
-        if (StrUtil.isNotBlank(invoiceNo)) {
-            purchase.setRemark("商店管理系统导入 " + invoiceNo);
-        } else {
-            purchase.setRemark("商店管理系统导入");
-        }
+        purchase.setRemark(null);
         purchase.setEmployeeGuid(defaults.getEmployeeGuid());
         purchase.setMarkerUserGuid(defaults.getMarkerUserGuid());
         purchase.setApproverUserGuid(defaults.getApproverUserGuid());
@@ -461,7 +457,7 @@ public class PurchaseImportEngine {
                     continue;
                 }
 
-                String barcode = BarcodeNormalizer.normalize(getCellValue(row.getCell(0)));
+                String barcode = BarcodeUtil.judgeBarcode(getCellValue(row.getCell(0)));
                 String name = getCellValue(row.getCell(1));
                 String qtyStr = getCellValue(row.getCell(2));
                 String priceStr = getCellValue(row.getCell(3));

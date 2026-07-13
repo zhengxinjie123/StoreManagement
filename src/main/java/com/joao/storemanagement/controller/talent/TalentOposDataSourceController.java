@@ -2,7 +2,8 @@ package com.joao.storemanagement.controller.talent;
 
 import com.joao.storemanagement.dto.response.ApiResponse;
 import com.joao.storemanagement.dto.talent.DataSourceDTO;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
+import com.joao.storemanagement.security.RequireRole;
 import com.joao.storemanagement.service.talent.TalentOposDataSourceService;
 import com.joao.storemanagement.vo.talent.DataSourceStatusVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,6 +22,7 @@ import java.util.Map;
 @Validated
 @RestController
 @RequestMapping("/api/talentOpos/dataSource")
+@RequireRole("ADMIN")
 @RequiredArgsConstructor
 @Tag(name = "TALENTOPOS数据源", description = "第三方库连接配置与验证")
 public class TalentOposDataSourceController {

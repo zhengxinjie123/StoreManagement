@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.mapper.primary.pricing.RetailPriceManualChangeMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO dbo.retail_price_manual_changes (
+            product_guid,
+            barcode,
+            product_name,
+            supplier_name,
+            old_retail_price_tax,
+            new_retail_price_tax,
+            username,
+            rolled_back,
+            created_at
+        ) VALUES (
+            #{productGuid},
+            #{barcode},
+            #{productName},
+            #{supplierName},
+            #{oldRetailPriceTax},
+            #{newRetailPriceTax},
+            #{username},
+            #{rolledBack},
+            #{createdAt}
+        )
+    </insert>
+
+    <select id="selectById" resultType="com.joao.storemanagement.entity.pricing.RetailPriceManualChange">
+        SELECT
+            id,
+            product_guid AS productGuid,
+            barcode,
+            product_name AS productName,
+            supplier_name AS supplierName,
+            old_retail_price_tax AS oldRetailPriceTax,
+            new_retail_price_tax AS newRetailPriceTax,
+            username,
+            rolled_back AS rolledBack,
+            created_at AS createdAt
+        FROM dbo.retail_price_manual_changes
+        WHERE id = #{id}
+    </select>
+
+    <update id="markRolledBack">
+        UPDATE dbo.retail_price_manual_changes
+        SET rolled_back = 1
+        WHERE id = #{id}
+    </update>
+
+    <select id="countAll" resultType="long">
+        SELECT COUNT(1) FROM dbo.retail_price_manual_changes
+    </select>
+
+    <select id="selectPage" resultType="com.joao.storemanagement.entity.pricing.RetailPriceManualChange">
+        SELECT
+            id,
+            product_guid AS productGuid,
+            barcode,
+            product_name AS productName,
+            supplier_name AS supplierName,
+            old_retail_price_tax AS oldRetailPriceTax,
+            new_retail_price_tax AS newRetailPriceTax,
+            username,
+            rolled_back AS rolledBack,
+            created_at AS createdAt
+        FROM dbo.retail_price_manual_changes
+        ORDER BY created_at DESC, id DESC
+        OFFSET #{offset} ROWS FETCH NEXT #{pageSize} ROWS ONLY
+    </select>
+</mapper>

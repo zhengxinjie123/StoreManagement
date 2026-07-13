@@ -11,7 +11,7 @@ import com.joao.storemanagement.enums.AttachmentExtension;
 import com.joao.storemanagement.enums.AttachmentOwner;
 import com.joao.storemanagement.enums.CleanStatus;
 import com.joao.storemanagement.enums.ImportStatus;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
 import com.joao.storemanagement.mapper.primary.ImportAttachmentMapper;
 import com.joao.storemanagement.service.primary.ImportAttachmentService;
 import com.joao.storemanagement.service.primary.InvoiceArchiveService;
@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,12 +49,17 @@ public class ImportAttachmentServiceImpl implements ImportAttachmentService {
     @Override
     public PageResponseVO<AttachmentVO> page(long current, long pageSize, String supplierGuid,
                                              AttachmentOwner ownerType, CleanStatus cleanStatus,
-                                             ImportStatus importStatus) {
+                                             ImportStatus importStatus, LocalDate fromUploadDate,
+                                             LocalDate toUploadDate) {
         LambdaQueryWrapper<ImportAttachment> query = Wrappers.lambdaQuery(ImportAttachment.class)
                 .eq(StrUtil.isNotBlank(supplierGuid), ImportAttachment::getSupplierGuid, supplierGuid)
                 .eq(ownerType != null, ImportAttachment::getOwnerType, ownerType)
                 .eq(cleanStatus != null, ImportAttachment::getCleanStatus, cleanStatus)
                 .eq(importStatus != null, ImportAttachment::getImportStatus, importStatus)
+                .ge(fromUploadDate != null, ImportAttachment::getUploadDate,
+                        fromUploadDate == null ? null : fromUploadDate.atStartOfDay())
+                .lt(toUploadDate != null, ImportAttachment::getUploadDate,
+                        toUploadDate == null ? null : toUploadDate.plusDays(1).atStartOfDay())
                 .orderByDesc(ImportAttachment::getUploadDate);
 
         Page<ImportAttachment> page = importAttachmentMapper.selectPage(Page.of(current, pageSize), query);
@@ -202,6 +208,19 @@ public class ImportAttachmentServiceImpl implements ImportAttachmentService {
             throw new BusinessException("附件不存在: " + uuid);
         }
         attachment.setImportStatus(ImportStatus.SUCCESS);
+        attachment.setLastImportError(null);
+        importAttachmentMapper.updateById(attachment);
+    }
+
+    @Override
+    public void markImportFailed(String uuid, String reason) {
+        requireUuid(uuid);
+        ImportAttachment attachment = importAttachmentMapper.selectById(uuid);
+        if (attachment == null) {
+            return;
+        }
+        attachment.setImportStatus(ImportStatus.FAILED);
+        attachment.setLastImportError(StrUtil.sub(reason, 0, 500));
         importAttachmentMapper.updateById(attachment);
     }
 

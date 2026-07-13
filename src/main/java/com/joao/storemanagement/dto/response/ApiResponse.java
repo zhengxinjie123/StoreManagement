@@ -1,7 +1,7 @@
 package com.joao.storemanagement.dto.response;
 
-import com.joao.storemanagement.exceptions.BusinessException;
-import com.joao.storemanagement.exceptions.FailureMessages;
+import com.joao.storemanagement.exception.BusinessException;
+import com.joao.storemanagement.exception.FailureMessages;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

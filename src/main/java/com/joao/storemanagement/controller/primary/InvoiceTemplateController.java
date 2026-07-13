@@ -2,7 +2,9 @@ package com.joao.storemanagement.controller.primary;
 
 import com.joao.storemanagement.dto.primary.InvoiceTemplateDTO;
 import com.joao.storemanagement.dto.response.ApiResponse;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
+import com.joao.storemanagement.security.RequirePermission;
+import com.joao.storemanagement.security.SystemPermission;
 import com.joao.storemanagement.service.primary.InvoiceCleanService;
 import com.joao.storemanagement.service.primary.InvoiceTemplateService;
 import com.joao.storemanagement.vo.primary.InvoiceCleanPreviewVO;
@@ -30,6 +32,7 @@ import java.util.List;
 @Validated
 @RestController
 @RequestMapping("/api/invoiceTemplate")
+@RequirePermission(SystemPermission.INVOICE_READ)
 @RequiredArgsConstructor
 @Tag(name = "发票模板", description = "清洗模板配置与试清洗")
 public class InvoiceTemplateController {
@@ -69,6 +72,7 @@ public class InvoiceTemplateController {
 
     @Operation(summary = "创建发票模板")
     @PostMapping("/insert")
+    @RequirePermission(SystemPermission.INVOICE_WRITE)
     public ApiResponse<InvoiceTemplateVO> create(@Valid @RequestBody InvoiceTemplateDTO form) {
         try {
             return ApiResponse.ok("模板创建成功", invoiceTemplateService.create(form));
@@ -79,6 +83,7 @@ public class InvoiceTemplateController {
 
     @Operation(summary = "更新发票模板")
     @PutMapping("/update/{id}")
+    @RequirePermission(SystemPermission.INVOICE_WRITE)
     public ApiResponse<InvoiceTemplateVO> update(
             @PathVariable @NotNull(message = "模板 ID 不能为空") Long id,
             @Valid @RequestBody InvoiceTemplateDTO form) {
@@ -91,6 +96,7 @@ public class InvoiceTemplateController {
 
     @Operation(summary = "删除发票模板")
     @DeleteMapping("/{id}")
+    @RequirePermission(SystemPermission.INVOICE_WRITE)
     public ApiResponse<Void> delete(@PathVariable @NotNull(message = "模板 ID 不能为空") Long id) {
         try {
             invoiceTemplateService.delete(id);
@@ -100,8 +106,20 @@ public class InvoiceTemplateController {
         }
     }
 
+    @Operation(summary = "复制发票模板")
+    @PostMapping("/{id}/copy")
+    @RequirePermission(SystemPermission.INVOICE_WRITE)
+    public ApiResponse<InvoiceTemplateVO> copy(@PathVariable @NotNull(message = "模板 ID 不能为空") Long id) {
+        try {
+            return ApiResponse.ok("模板复制成功", invoiceTemplateService.copy(id));
+        } catch (BusinessException ex) {
+            return ApiResponse.operationFail("复制发票模板", ex);
+        }
+    }
+
     @Operation(summary = "试清洗发票")
     @PostMapping("/{id}/preview")
+    @RequirePermission(SystemPermission.INVOICE_WRITE)
     public ApiResponse<InvoiceCleanPreviewVO> preview(
             @PathVariable @NotNull(message = "模板 ID 不能为空") Long id,
             @RequestParam @NotBlank(message = "attachmentUuid 不能为空") String attachmentUuid,

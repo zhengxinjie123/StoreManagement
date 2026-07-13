@@ -15,7 +15,7 @@ import com.joao.storemanagement.dto.primary.InvoiceCleanConfirmDTO;
 import com.joao.storemanagement.entity.primary.ImportAttachment;
 import com.joao.storemanagement.entity.primary.InvoiceTemplate;
 import com.joao.storemanagement.enums.InvoiceCleanExtension;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
 import com.joao.storemanagement.mapper.primary.ImportAttachmentMapper;
 import com.joao.storemanagement.service.primary.ImportAttachmentService;
 import com.joao.storemanagement.service.primary.InvoiceArchiveService;
@@ -96,7 +96,7 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
         for (InvoiceCleanConfirmDTO.Row source : form.getRows()) {
             InvoiceCleanRow row = new InvoiceCleanRow();
             row.setBarcode(StrUtil.trim(source.getBarcode()));
-            row.setForeignName(StrUtil.trim(source.getForeignName()));
+            row.setForeignName(InvoiceCleanSupport.normalizeProductName(StrUtil.trim(source.getForeignName())));
             row.setQuantity(source.getQuantity());
             row.setOutputPrice(source.getOutputPrice());
             row.setTaxRate(source.getTaxRate());
@@ -115,6 +115,8 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
                 .discountAmount(source.getDiscountAmount())
                 .totalAmount(source.getTotalAmount())
                 .taxIncluded(source.getTaxIncluded())
+                .filteredCount(source.getFilteredCount())
+                .filteredAmount(source.getFilteredAmount())
                 .remark(source.getRemark())
                 .build();
     }
@@ -214,6 +216,7 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
         requireMatchingSupplier(attachment, supplierGuid);
 
         InvoiceTemplate template = invoiceTemplateService.requireTemplateForSupplier(templateId, supplierGuid);
+        invoiceTemplateService.touchLastUsed(templateId);
         boolean taxIncluded = invoiceTemplateService.isTaxIncluded(template);
         Path sourceFile = Path.of(storeProperties.getUpload().getAttachmentDir())
                 .resolve(attachment.getUuid() + "." + attachment.getExtensionName());
@@ -251,7 +254,7 @@ public class InvoiceCleanServiceImpl implements InvoiceCleanService {
             for (InvoiceCleanRow row : rows) {
                 writer.writeRow(List.of(
                         row.getBarcode(),
-                        row.getForeignName(),
+                        InvoiceCleanSupport.normalizeProductName(row.getForeignName()),
                         row.getQuantity(),
                         row.getOutputPrice(),
                         row.getTaxRate()));

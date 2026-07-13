@@ -1,7 +1,7 @@
 package com.joao.storemanagement.utils;
 
 import cn.hutool.core.util.StrUtil;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
 
 import java.util.Locale;
 import java.util.UUID;

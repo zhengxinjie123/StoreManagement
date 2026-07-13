@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.mapper.talent.PosProductPriceWriteMapper">
+
+    <sql id="productSelect">
+        SELECT
+            CAST(p.GUID AS varchar(36)) AS guid,
+            p.[No] AS productCode,
+            LTRIM(RTRIM(ISNULL(p.Barcode, ''))) AS barcode,
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(s.[Name])), ''),
+                NULLIF(LTRIM(RTRIM(s.NameP)), '')
+            ) AS supplierName,
+            p.NameP AS nameForeign,
+            p.[Name] AS nameChinese,
+            p.QuantityBk AS quantity,
+            p.PurchasePrice AS purchasePrice,
+            p.PurchasePriceTax AS purchasePriceTax,
+            p.TaxRate AS taxRate,
+            p.RetailPriceTax AS retailPrice
+        FROM dbo.Products p
+        LEFT JOIN dbo.Suppliers s ON s.GUID = p.DefaultSupplierGUID
+    </sql>
+
+    <sql id="missingRetailWhere">
+        WHERE LTRIM(RTRIM(ISNULL(p.Barcode, ''))) &lt;&gt; ''
+          AND (p.RetailPriceTax IS NULL OR p.RetailPriceTax = 0)
+          AND (p.IsDisabled = 0 OR p.IsDisabled IS NULL)
+    </sql>
+
+    <select id="selectMissingRetailPrice" resultType="com.joao.storemanagement.dto.talent.ProductDTO">
+        <include refid="productSelect"/>
+        <include refid="missingRetailWhere"/>
+        ORDER BY p.UpdateTime DESC
+    </select>
+
+    <sql id="matchedByTempWhere">
+        AND EXISTS (
+            SELECT 1
+            FROM #RetailPriceRefBarcodes ref
+            WHERE ref.barcode = LTRIM(RTRIM(ISNULL(p.Barcode, '')))
+        )
+    </sql>
+
+    <sql id="noRefByTempWhere">
+        AND NOT EXISTS (
+            SELECT 1
+            FROM #RetailPriceRefBarcodes ref
+            WHERE ref.barcode = LTRIM(RTRIM(ISNULL(p.Barcode, '')))
+        )
+    </sql>
+
+    <select id="countMissingRetailMatchedWithTemp" resultType="long">
+        SELECT COUNT(1)
+        FROM dbo.Products p
+        <include refid="missingRetailWhere"/>
+        <include refid="matchedByTempWhere"/>
+    </select>
+
+    <select id="selectMissingRetailMatchedGuidsWithTemp" resultType="string">
+        SELECT CAST(p.GUID AS varchar(36))
+        FROM dbo.Products p
+        <include refid="missingRetailWhere"/>
+        <include refid="matchedByTempWhere"/>
+        ORDER BY p.UpdateTime DESC
+    </select>
+
+    <select id="selectMissingRetailPricePageMatchedWithTemp" resultType="com.joao.storemanagement.dto.talent.ProductDTO">
+        <include refid="productSelect"/>
+        <include refid="missingRetailWhere"/>
+        <include refid="matchedByTempWhere"/>
+        ORDER BY p.UpdateTime DESC
+        OFFSET #{offset} ROWS FETCH NEXT #{pageSize} ROWS ONLY
+    </select>
+
+    <select id="selectMissingRetailPricePageNoRefWithTemp" resultType="com.joao.storemanagement.dto.talent.ProductDTO">
+        <include refid="productSelect"/>
+        <include refid="missingRetailWhere"/>
+        <include refid="noRefByTempWhere"/>
+        ORDER BY p.UpdateTime DESC
+        OFFSET #{offset} ROWS FETCH NEXT #{pageSize} ROWS ONLY
+    </select>
+
+    <select id="selectMissingRetailPricePage" resultType="com.joao.storemanagement.dto.talent.ProductDTO">
+        <include refid="productSelect"/>
+        <include refid="missingRetailWhere"/>
+        ORDER BY p.UpdateTime DESC
+        OFFSET #{offset} ROWS FETCH NEXT #{pageSize} ROWS ONLY
+    </select>
+
+    <select id="selectByGuids" resultType="com.joao.storemanagement.dto.talent.ProductDTO">
+        <include refid="productSelect"/>
+        WHERE CAST(p.GUID AS varchar(36)) IN
+        <foreach collection="guids" item="guid" open="(" separator="," close=")">
+            #{guid}
+        </foreach>
+    </select>
+
+    <select id="countMissingRetailPrice" resultType="long">
+        SELECT COUNT(1)
+        FROM dbo.Products p
+        WHERE LTRIM(RTRIM(ISNULL(p.Barcode, ''))) &lt;&gt; ''
+          AND (p.RetailPriceTax IS NULL OR p.RetailPriceTax = 0)
+          AND (p.IsDisabled = 0 OR p.IsDisabled IS NULL)
+    </select>
+
+    <update id="updateRetailPrice">
+        UPDATE dbo.Products
+        SET RetailPriceTax = #{retailPriceTax},
+            RetailPrice = #{retailPrice},
+            UpdateTime = GETDATE()
+        WHERE CAST(GUID AS varchar(36)) = #{productGuid}
+          AND (RetailPriceTax IS NULL OR RetailPriceTax = 0)
+    </update>
+
+    <select id="selectByGuid" resultType="com.joao.storemanagement.dto.talent.ProductDTO">
+        <include refid="productSelect"/>
+        WHERE CAST(p.GUID AS varchar(36)) = #{productGuid}
+    </select>
+
+    <update id="updateRetailPriceDirect">
+        UPDATE dbo.Products
+        SET RetailPriceTax = #{retailPriceTax},
+            RetailPrice = #{retailPrice},
+            UpdateTime = GETDATE()
+        WHERE CAST(GUID AS varchar(36)) = #{productGuid}
+    </update>
+</mapper>
+

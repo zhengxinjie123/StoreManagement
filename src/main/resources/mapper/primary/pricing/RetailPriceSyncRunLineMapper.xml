@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.mapper.primary.pricing.RetailPriceSyncRunLineMapper">
+
+    <resultMap id="RetailPriceSyncRunLineMap" type="com.joao.storemanagement.entity.pricing.RetailPriceSyncRunLine">
+        <id property="id" column="id"/>
+        <result property="runId" column="run_id"/>
+        <result property="productGuid" column="product_guid"/>
+        <result property="barcode" column="barcode"/>
+        <result property="oldRetailPriceTax" column="old_retail_price_tax"/>
+        <result property="newRetailPriceTax" column="new_retail_price_tax"/>
+        <result property="sourceCode" column="source_code"/>
+        <result property="sourceName" column="source_name"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="countByRunId" resultType="long">
+        SELECT COUNT(1) FROM retail_price_sync_run_lines WHERE run_id = #{runId}
+    </select>
+
+    <select id="selectPageByRunId" resultMap="RetailPriceSyncRunLineMap">
+        SELECT id, run_id, product_guid, barcode, old_retail_price_tax, new_retail_price_tax,
+               source_code, source_name, created_at
+        FROM retail_price_sync_run_lines
+        WHERE run_id = #{runId}
+        ORDER BY id ASC
+        OFFSET #{offset} ROWS FETCH NEXT #{pageSize} ROWS ONLY
+    </select>
+
+    <select id="selectByRunId" resultMap="RetailPriceSyncRunLineMap">
+        SELECT id, run_id, product_guid, barcode, old_retail_price_tax, new_retail_price_tax,
+               source_code, source_name, created_at
+        FROM retail_price_sync_run_lines
+        WHERE run_id = #{runId}
+        ORDER BY id ASC
+    </select>
+</mapper>

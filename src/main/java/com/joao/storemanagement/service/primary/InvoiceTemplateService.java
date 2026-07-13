@@ -15,7 +15,8 @@ public interface InvoiceTemplateService {
     /**
      * 分页查询模板。
      */
-    PageResponseVO<InvoiceTemplateVO> page(long current, long pageSize, String supplierGuid);
+    PageResponseVO<InvoiceTemplateVO> page(
+            long current, long pageSize, String supplierGuid);
 
     /**
      * 查询供应商可用模板列表。
@@ -41,6 +42,21 @@ public interface InvoiceTemplateService {
      * 删除模板。
      */
     void delete(Long id);
+
+    /**
+     * 复制模板。
+     *
+     * @param id 源模板 ID
+     * @return 新模板
+     */
+    InvoiceTemplateVO copy(Long id);
+
+    /**
+     * 记录模板最近使用时间。
+     *
+     * @param id 模板 ID
+     */
+    void touchLastUsed(Long id);
 
     /**
      * 判断模板是否含税入库。

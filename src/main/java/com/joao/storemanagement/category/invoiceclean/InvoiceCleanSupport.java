@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -32,6 +33,22 @@ public final class InvoiceCleanSupport {
 
     public static String joinName(String current, String extra) {
         return StrUtil.isBlank(current) ? extra.trim() : current + " " + extra.trim();
+    }
+
+    public static String normalizeProductName(String name) {
+        if (StrUtil.isBlank(name)) {
+            return StrUtil.nullToEmpty(name);
+        }
+        return name.trim().toUpperCase(Locale.ROOT);
+    }
+
+    public static NameParts normalizeNameParts(NameParts nameParts) {
+        if (nameParts == null) {
+            return new NameParts("", "");
+        }
+        return new NameParts(
+                normalizeProductName(nameParts.chinese()),
+                normalizeProductName(nameParts.foreignName()));
     }
 
     public static boolean isZeroPricePalletRow(NameParts nameParts, BigDecimal unitPriceExTax,
@@ -101,7 +118,7 @@ public final class InvoiceCleanSupport {
     public static NameParts resolveName(Sheet sheet, int rowIndex, InvoiceTemplate template) {
         String rawName = ExcelCellReader.readString(sheet, rowIndex, template.getForeignNameCol());
         String chinese = ExcelCellReader.readString(sheet, rowIndex, template.getChineseNameCol());
-        return new NameParts(StrUtil.trim(chinese), StrUtil.trim(rawName));
+        return normalizeNameParts(new NameParts(StrUtil.trim(chinese), StrUtil.trim(rawName)));
     }
 
     public static NameParts splitMixedName(String raw) {
@@ -124,9 +141,9 @@ public final class InvoiceCleanSupport {
             appendToken(foreign, trimmed.substring(last));
         }
         if (chinese.isEmpty() && foreign.isEmpty()) {
-            return new NameParts("", trimmed);
+            return normalizeNameParts(new NameParts("", trimmed));
         }
-        return new NameParts(chinese.toString().trim(), foreign.toString().trim());
+        return normalizeNameParts(new NameParts(chinese.toString().trim(), foreign.toString().trim()));
     }
 
     public static void appendName(List<InvoiceCleanRow> rows, NameParts nameParts, Sheet sheet, int rowIndex, InvoiceTemplate template) {
@@ -150,13 +167,13 @@ public final class InvoiceCleanSupport {
             if (chinese.matches("^-?\\d+\\.0+$")) {
                 chinese = chinese.substring(0, chinese.indexOf('.'));
             }
-            last.setChineseName(joinName(last.getChineseName(), chinese));
+            last.setChineseName(normalizeProductName(joinName(last.getChineseName(), chinese)));
         }
         if (StrUtil.isNotEmpty(foreign)) {
             if (foreign.matches("^-?\\d+\\.0+$")) {
                 foreign = foreign.substring(0, foreign.indexOf('.'));
             }
-            last.setForeignName(joinName(last.getForeignName(), foreign));
+            last.setForeignName(normalizeProductName(joinName(last.getForeignName(), foreign)));
         }
     }
 

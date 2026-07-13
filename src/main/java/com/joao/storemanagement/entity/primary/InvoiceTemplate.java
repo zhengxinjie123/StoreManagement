@@ -103,4 +103,7 @@ public class InvoiceTemplate {
 
     @TableField("updated_at")
     private LocalDateTime updatedAt;
+
+    @TableField("last_used_at")
+    private LocalDateTime lastUsedAt;
 }

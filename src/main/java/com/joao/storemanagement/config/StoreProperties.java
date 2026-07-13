@@ -87,6 +87,19 @@ public class StoreProperties {
         return upload;
     }
 
+    public EmailSettings getEmail() {
+        EmailSettings email = new EmailSettings();
+        email.setEnabled(appConfigService.getBoolean("email.enabled", false));
+        email.setHost(appConfigService.getString("email.host", ""));
+        email.setPort(appConfigService.getInteger("email.port", 993));
+        email.setUsername(appConfigService.getString("email.username", ""));
+        email.setPassword(appConfigService.getString("email.password", ""));
+        email.setUseSsl(appConfigService.getBoolean("email.use-ssl", true));
+        email.setAllowedExtensions(appConfigService.getString("email.allowed-extensions", "xls,xlsx,pdf"));
+        email.setStorageDir(appConfigService.getString("email.storage-dir", "uploads/email-inbox"));
+        return email;
+    }
+
     @Getter
     @Setter
     public static class Invoice {
@@ -140,5 +153,18 @@ public class StoreProperties {
         private String foreignSupplierTypeGuid = "25AFFF2D-A59A-4582-B98E-BE545DB916A5";
         private String chineseSupplierIsoCountryCode = "CN";
         private String foreignSupplierIsoCountryCode = "PT";
+    }
+
+    @Getter
+    @Setter
+    public static class EmailSettings {
+        private boolean enabled = false;
+        private String host = "";
+        private int port = 993;
+        private String username = "";
+        private String password = "";
+        private boolean useSsl = true;
+        private String allowedExtensions = "xls,xlsx,pdf";
+        private String storageDir = "uploads/email-inbox";
     }
 }

@@ -1,7 +1,9 @@
 package com.joao.storemanagement.controller.talent;
 
 import com.joao.storemanagement.dto.response.ApiResponse;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
+import com.joao.storemanagement.security.RequirePermission;
+import com.joao.storemanagement.security.SystemPermission;
 import com.joao.storemanagement.entity.talent.Supplier;
 import com.joao.storemanagement.service.talent.TalentOposDataSourceService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +19,7 @@ import java.util.List;
 @Validated
 @RestController
 @RequestMapping("/api/talentOpos/supplier")
+@RequirePermission(SystemPermission.INVOICE_READ)
 @RequiredArgsConstructor
 @Tag(name = "TALENTOPOS供应商", description = "供应商下拉数据")
 public class TalentSupplierController {

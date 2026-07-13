@@ -7,24 +7,15 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.joao.storemanagement.dto.talent.DataSourceDTO;
 import com.joao.storemanagement.entity.primary.TalentDataSourceConfig;
 import com.joao.storemanagement.entity.talent.Supplier;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
 import com.joao.storemanagement.mapper.primary.TalentDataSourceConfigMapper;
 import com.joao.storemanagement.config.AppConfigOptionSource;
 import com.joao.storemanagement.mapper.talent.ProductMapper;
 import com.joao.storemanagement.mapper.talent.SupplierMapper;
 import com.joao.storemanagement.mapper.talent.TalentReferenceMapper;
-import com.joao.storemanagement.security.TextEncryptor;
+import com.joao.storemanagement.utils.TextEncryptorUtil;
 import com.joao.storemanagement.service.primary.AppConfigService;
 import com.joao.storemanagement.service.talent.TalentOposDataSourceService;
-import com.joao.storemanagement.talent.purchase.mapper.PurchaseDetailMapper;
-import com.joao.storemanagement.talent.purchase.mapper.PurchaseHeaderMapper;
-import com.joao.storemanagement.talent.purchase.mapper.PurchaseInventoryMapper;
-import com.joao.storemanagement.talent.purchase.mapper.PurchaseParameterMapper;
-import com.joao.storemanagement.talent.purchase.mapper.PurchaseProductMapper;
-import com.joao.storemanagement.talent.purchase.mapper.PurchaseProductTypeMapper;
-import com.joao.storemanagement.talent.purchase.mapper.PurchaseSupplierMapper;
-import com.joao.storemanagement.talent.purchase.mapper.PurchaseSupplierTypeMapper;
-import com.joao.storemanagement.talent.purchase.mapper.PurchaseTaxMapper;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -34,8 +25,13 @@ import com.joao.storemanagement.vo.talent.TalentReferenceOptionVO;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.core.type.classreading.CachingMetadataReaderFactory;
+import org.springframework.core.type.classreading.MetadataReaderFactory;
+import org.springframework.util.ClassUtils;
 import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
@@ -87,6 +83,11 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
             lastAppliedAt = savedConfig.getUpdatedAt();
             log.warn("TALENTOPOS 数据源配置不可用，已跳过自动恢复: {}", ex.getMessage());
         }
+    }
+
+    @PreDestroy
+    public void destroy() {
+        closeQuietly(dataSource);
     }
 
     @Override
@@ -226,6 +227,17 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
     }
 
     @Override
+    public <T> T executeInSession(Function<SqlSession, T> action) {
+        try (SqlSession session = currentSqlSessionFactory().openSession()) {
+            return action.apply(session);
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BusinessException("TALENTOPOS 操作失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    @Override
     public <T> T executeInWriteTransaction(Function<SqlSession, T> action) {
         try (SqlSession session = currentSqlSessionFactory().openSession(false)) {
             try {
@@ -307,7 +319,7 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
             MybatisSqlSessionFactoryBean factoryBean = new MybatisSqlSessionFactoryBean();
             factoryBean.setDataSource(dataSource);
             factoryBean.setMapperLocations(new PathMatchingResourcePatternResolver()
-                    .getResources("classpath:mapper/talent/purchase/**/*.xml"));
+                    .getResources("classpath:mapper/talent/**/*.xml"));
 
             MybatisConfiguration configuration = new MybatisConfiguration();
             configuration.setMapUnderscoreToCamelCase(true);
@@ -391,18 +403,29 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
     }
 
     private static void registerMappers(MybatisConfiguration configuration) {
-        configuration.addMapper(ProductMapper.class);
-        configuration.addMapper(SupplierMapper.class);
-        configuration.addMapper(TalentReferenceMapper.class);
-        configuration.addMapper(PurchaseProductMapper.class);
-        configuration.addMapper(PurchaseParameterMapper.class);
-        configuration.addMapper(PurchaseProductTypeMapper.class);
-        configuration.addMapper(PurchaseSupplierMapper.class);
-        configuration.addMapper(PurchaseSupplierTypeMapper.class);
-        configuration.addMapper(PurchaseHeaderMapper.class);
-        configuration.addMapper(PurchaseDetailMapper.class);
-        configuration.addMapper(PurchaseInventoryMapper.class);
-        configuration.addMapper(PurchaseTaxMapper.class);
+        registerMapperPackage(configuration, "com.joao.storemanagement.mapper.talent");
+        registerMapperPackage(configuration, "com.joao.storemanagement.talent.purchase.mapper");
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void registerMapperPackage(MybatisConfiguration configuration, String packageName) {
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+            MetadataReaderFactory metadataReaderFactory = new CachingMetadataReaderFactory(resolver);
+            String packagePath = ClassUtils.convertClassNameToResourcePath(packageName);
+            Resource[] resources = resolver.getResources("classpath*:" + packagePath + "/**/*.class");
+            for (Resource resource : resources) {
+                String className = metadataReaderFactory.getMetadataReader(resource)
+                        .getClassMetadata()
+                        .getClassName();
+                Class mapperClass = ClassUtils.forName(className, TalentOposDataSourceServiceImpl.class.getClassLoader());
+                if (mapperClass.isInterface() && !configuration.hasMapper(mapperClass)) {
+                    configuration.addMapper(mapperClass);
+                }
+            }
+        } catch (Exception ex) {
+            throw new IllegalStateException("注册 TALENTOPOS Mapper 失败: " + packageName, ex);
+        }
     }
 
     private void saveConfig(DataSourceDTO form) {
@@ -412,7 +435,7 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
                 .port(form.getPort())
                 .databaseName(form.getDatabaseName())
                 .username(form.getUsername())
-                .password(TextEncryptor.encrypt(form.getPassword(), datasourceConfigKey()))
+                .password(TextEncryptorUtil.encrypt(form.getPassword(), datasourceConfigKey()))
                 .updatedAt(lastAppliedAt)
                 .build();
         if (talentDataSourceConfigMapper.selectById(CONFIG_ID) == null) {
@@ -428,7 +451,7 @@ public class TalentOposDataSourceServiceImpl implements TalentOposDataSourceServ
         form.setPort(configEntity.getPort());
         form.setDatabaseName(configEntity.getDatabaseName());
         form.setUsername(configEntity.getUsername());
-        form.setPassword(TextEncryptor.decrypt(configEntity.getPassword(), datasourceConfigKey()));
+        form.setPassword(TextEncryptorUtil.decrypt(configEntity.getPassword(), datasourceConfigKey()));
         return form;
     }
 

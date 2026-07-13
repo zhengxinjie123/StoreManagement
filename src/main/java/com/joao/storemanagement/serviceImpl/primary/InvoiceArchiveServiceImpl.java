@@ -5,12 +5,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.joao.storemanagement.config.StoreProperties;
+import com.joao.storemanagement.dto.primary.BatchArchiveDownloadDTO;
 import com.joao.storemanagement.entity.primary.ImportAttachment;
 import com.joao.storemanagement.entity.primary.InvoiceArchive;
 import com.joao.storemanagement.entity.talent.Supplier;
 import com.joao.storemanagement.enums.AttachmentOwner;
 import com.joao.storemanagement.enums.ImportStatus;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
 import com.joao.storemanagement.mapper.primary.ImportAttachmentMapper;
 import com.joao.storemanagement.mapper.primary.InvoiceArchiveMapper;
 import com.joao.storemanagement.service.primary.InvoiceArchiveService;
@@ -24,10 +25,13 @@ import com.joao.storemanagement.vo.response.PageResponseVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
@@ -36,6 +40,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Service
 @RequiredArgsConstructor
@@ -49,11 +55,26 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
     private final StoreProperties storeProperties;
 
     @Override
-    public PageResponseVO<InvoiceArchiveVO> page(long current, long pageSize, String supplierGuid) {
+    public PageResponseVO<InvoiceArchiveVO> page(
+            long current, long pageSize, String supplierGuid, AttachmentOwner ownerType,
+            ImportStatus importStatus, LocalDate fromDate, LocalDate toDate) {
         LambdaQueryWrapper<InvoiceArchive> query = Wrappers.lambdaQuery(InvoiceArchive.class)
                 .orderByDesc(InvoiceArchive::getCreatedAt);
         if (StrUtil.isNotBlank(supplierGuid)) {
             query.eq(InvoiceArchive::getSupplierGuid, GuidHelper.normalize(supplierGuid));
+        }
+        if (fromDate != null) {
+            query.ge(InvoiceArchive::getCreatedAt, fromDate.atStartOfDay());
+        }
+        if (toDate != null) {
+            query.lt(InvoiceArchive::getCreatedAt, toDate.plusDays(1).atStartOfDay());
+        }
+        List<String> attachmentUuids = resolveAttachmentUuidFilter(ownerType, importStatus);
+        if (attachmentUuids != null) {
+            if (attachmentUuids.isEmpty()) {
+                return PageResponseVO.of(current, pageSize, 0, List.of());
+            }
+            query.in(InvoiceArchive::getAttachmentUuid, attachmentUuids);
         }
         Page<InvoiceArchive> page = invoiceArchiveMapper.selectPage(Page.of(current, pageSize), query);
         List<InvoiceArchiveVO> records = page.getRecords().stream().map(this::toVO).toList();
@@ -61,11 +82,13 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
     }
 
     @Override
-    public PageResponseVO<InvoiceArchiveSupplierVO> pageSuppliers(long current, long pageSize, String keyword) {
-        List<InvoiceArchive> archives = invoiceArchiveMapper.selectList(
-                Wrappers.lambdaQuery(InvoiceArchive.class)
-                        .select(InvoiceArchive::getSupplierGuid, InvoiceArchive::getCreatedAt)
-                        .orderByDesc(InvoiceArchive::getCreatedAt));
+    public PageResponseVO<InvoiceArchiveSupplierVO> pageSuppliers(
+            long current, long pageSize, String keyword, AttachmentOwner ownerType,
+            ImportStatus importStatus) {
+        List<InvoiceArchive> archives = listArchivesForSupplierSummary(ownerType, importStatus);
+        if (archives.isEmpty()) {
+            return PageResponseVO.of(current, pageSize, 0, List.of());
+        }
 
         Map<String, List<InvoiceArchive>> grouped = archives.stream()
                 .collect(Collectors.groupingBy(archive -> GuidHelper.normalize(archive.getSupplierGuid())));
@@ -84,6 +107,66 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
                 ? List.of()
                 : suppliers.subList((int) from, (int) Math.min(from + pageSize, suppliers.size()));
         return PageResponseVO.of(current, pageSize, suppliers.size(), records);
+    }
+
+    private List<InvoiceArchive> listArchivesForSupplierSummary(
+            AttachmentOwner ownerType, ImportStatus importStatus) {
+        LambdaQueryWrapper<InvoiceArchive> query = Wrappers.lambdaQuery(InvoiceArchive.class)
+                .select(InvoiceArchive::getSupplierGuid, InvoiceArchive::getCreatedAt)
+                .orderByDesc(InvoiceArchive::getCreatedAt);
+        List<String> attachmentUuids = resolveAttachmentUuidFilter(ownerType, importStatus);
+        if (attachmentUuids != null) {
+            if (attachmentUuids.isEmpty()) {
+                return List.of();
+            }
+            query.in(InvoiceArchive::getAttachmentUuid, attachmentUuids);
+        }
+        return invoiceArchiveMapper.selectList(query);
+    }
+
+    private List<String> resolveAttachmentUuidFilter(AttachmentOwner ownerType, ImportStatus importStatus) {
+        if (ownerType == null && importStatus == null) {
+            return null;
+        }
+        List<String> uuids = null;
+        if (ownerType != null) {
+            uuids = listAttachmentUuidsByOwner(ownerType);
+            if (uuids.isEmpty()) {
+                return List.of();
+            }
+        }
+        if (importStatus != null) {
+            List<String> byStatus = listAttachmentUuidsByImportStatus(importStatus);
+            if (byStatus.isEmpty()) {
+                return List.of();
+            }
+            if (uuids == null) {
+                return byStatus;
+            }
+            Set<String> statusSet = new HashSet<>(byStatus);
+            return uuids.stream().filter(statusSet::contains).toList();
+        }
+        return uuids;
+    }
+
+    private List<String> listAttachmentUuidsByOwner(AttachmentOwner ownerType) {
+        return importAttachmentMapper.selectList(
+                        Wrappers.lambdaQuery(ImportAttachment.class)
+                                .eq(ImportAttachment::getOwnerType, ownerType)
+                                .select(ImportAttachment::getUuid))
+                .stream()
+                .map(ImportAttachment::getUuid)
+                .toList();
+    }
+
+    private List<String> listAttachmentUuidsByImportStatus(ImportStatus importStatus) {
+        return importAttachmentMapper.selectList(
+                        Wrappers.lambdaQuery(ImportAttachment.class)
+                                .eq(ImportAttachment::getImportStatus, importStatus)
+                                .select(ImportAttachment::getUuid))
+                .stream()
+                .map(ImportAttachment::getUuid)
+                .toList();
     }
 
     @Override
@@ -136,6 +219,7 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
             existing.setAmountBeforeDiscount(summary.getAmountBeforeDiscount());
             existing.setDiscountAmount(summary.getDiscountAmount());
             existing.setTotalAmount(summary.getTotalAmount());
+            existing.setFilteredAmount(summary.getFilteredAmount());
             existing.setTaxIncluded(summary.getTaxIncluded());
             existing.setRemark(summary.getRemark());
             existing.setCreatedAt(archiveTime);
@@ -164,6 +248,7 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
                 .amountBeforeDiscount(summary.getAmountBeforeDiscount())
                 .discountAmount(summary.getDiscountAmount())
                 .totalAmount(summary.getTotalAmount())
+                .filteredAmount(summary.getFilteredAmount())
                 .taxIncluded(summary.getTaxIncluded())
                 .remark(summary.getRemark())
                 .createdAt(archiveTime)
@@ -201,6 +286,48 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
         }
     }
 
+    @Override
+    public byte[] batchDownloadZip(BatchArchiveDownloadDTO request) {
+        if (request.uuids() == null || request.uuids().isEmpty()) {
+            throw new BusinessException("请选择要下载的归档发票");
+        }
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream();
+                ZipOutputStream zip = new ZipOutputStream(output)) {
+            Set<String> usedNames = new HashSet<>();
+            for (String uuid : request.uuids()) {
+                DownloadFileVO file = getDownloadFile(uuid);
+                String entryName = uniqueZipEntryName(file.getFilename(), usedNames);
+                zip.putNextEntry(new ZipEntry(entryName));
+                try (InputStream input = Files.newInputStream(file.getPath())) {
+                    input.transferTo(zip);
+                }
+                zip.closeEntry();
+            }
+            zip.finish();
+            return output.toByteArray();
+        } catch (IOException ex) {
+            throw new BusinessException("批量下载失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    private String uniqueZipEntryName(String filename, Set<String> usedNames) {
+        if (!usedNames.contains(filename)) {
+            usedNames.add(filename);
+            return filename;
+        }
+        int dot = filename.lastIndexOf('.');
+        String base = dot > 0 ? filename.substring(0, dot) : filename;
+        String ext = dot > 0 ? filename.substring(dot) : "";
+        for (int index = 1; index < 1000; index++) {
+            String candidate = base + "-" + index + ext;
+            if (!usedNames.contains(candidate)) {
+                usedNames.add(candidate);
+                return candidate;
+            }
+        }
+        throw new BusinessException("归档文件名冲突过多: " + filename);
+    }
+
     private Path resolveAbsolutePath(String relativePath) {
         return Path.of(storeProperties.getUpload().getInvoiceArchiveDir()).resolve(relativePath).normalize();
     }
@@ -224,8 +351,7 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
     private InvoiceArchiveVO toVO(InvoiceArchive archive) {
         ImportAttachment attachment = findAttachment(archive.getAttachmentUuid());
         boolean deletable = attachment == null || ImportStatus.SUCCESS != attachment.getImportStatus();
-        AttachmentOwner ownerType = attachment == null ? null : attachment.getOwnerType();
-        return InvoiceArchiveVO.of(archive, deletable, ownerType);
+        return InvoiceArchiveVO.of(archive, deletable, attachment);
     }
 
     private ImportAttachment findAttachment(String attachmentUuid) {
@@ -245,8 +371,8 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
         AttachmentOwner owner = attachment.getOwnerType() == null ? AttachmentOwner.SELF : attachment.getOwnerType();
         String supplierName = resolveSupplierDisplayName(supplierGuid);
         String month = ARCHIVE_MONTH.format(createdAt);
-        String baseName = sanitizeFileName(supplierName + " [" + owner.getDescription() + "] " + month);
-        Set<String> usedNames = listUsedArchiveNames(supplierGuid, createdAt, excludeUuid);
+        String baseName = sanitizeFileName(supplierName + " " + month);
+        Set<String> usedNames = listUsedArchiveNames(supplierGuid, createdAt, excludeUuid, owner);
         int maxAttempts = storeProperties.getArchive().getMaxNameSuffixAttempts();
         for (int index = 1; index < maxAttempts; index++) {
             String candidate = baseName + "-" + index;
@@ -257,7 +383,8 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
         throw new BusinessException("同月归档文件名冲突过多: " + baseName);
     }
 
-    private Set<String> listUsedArchiveNames(String supplierGuid, LocalDateTime createdAt, String excludeUuid) {
+    private Set<String> listUsedArchiveNames(String supplierGuid, LocalDateTime createdAt, String excludeUuid,
+                                             AttachmentOwner ownerType) {
         String normalizedSupplierGuid = GuidHelper.normalize(supplierGuid);
         String normalizedExcludeUuid = StrUtil.isBlank(excludeUuid) ? null : GuidHelper.normalize(excludeUuid);
         List<InvoiceArchive> archives = invoiceArchiveMapper.selectList(
@@ -268,6 +395,13 @@ public class InvoiceArchiveServiceImpl implements InvoiceArchiveService {
         Set<String> usedNames = new HashSet<>();
         for (InvoiceArchive archive : archives) {
             if (normalizedExcludeUuid != null && normalizedExcludeUuid.equalsIgnoreCase(archive.getUuid())) {
+                continue;
+            }
+            ImportAttachment attachment = findAttachment(archive.getAttachmentUuid());
+            AttachmentOwner archiveOwner = attachment == null || attachment.getOwnerType() == null
+                    ? AttachmentOwner.SELF
+                    : attachment.getOwnerType();
+            if (archiveOwner != ownerType) {
                 continue;
             }
             usedNames.add(archive.getFileName());

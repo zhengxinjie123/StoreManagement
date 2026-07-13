@@ -1,10 +1,12 @@
 package com.joao.storemanagement.controller.talent;
 
 import com.joao.storemanagement.dto.response.ApiResponse;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
+import com.joao.storemanagement.security.RequirePermission;
+import com.joao.storemanagement.security.SystemPermission;
 import com.joao.storemanagement.service.talent.TalentPurchaseImportService;
 import com.joao.storemanagement.talent.purchase.dto.PurchaseImportResult;
-import com.joao.storemanagement.exceptions.FailureMessages;
+import com.joao.storemanagement.exception.FailureMessages;
 import com.joao.storemanagement.vo.talent.PurchaseImportResultVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Validated
 @RestController
 @RequestMapping("/api/talentOpos/purchase")
+@RequirePermission(SystemPermission.INVOICE_READ)
 @RequiredArgsConstructor
 @Tag(name = "TALENTOPOS采购入库", description = "Excel 导入采购单并写入 TALENTOPOS")
 public class TalentPurchaseImportController {
@@ -27,6 +30,7 @@ public class TalentPurchaseImportController {
 
     @Operation(summary = "Excel 采购入库", description = "解析标准格式 Excel，创建采购单并更新库存")
     @PostMapping("/importExcel")
+    @RequirePermission(SystemPermission.INVOICE_WRITE)
     public ApiResponse<PurchaseImportResultVO> importExcel(@RequestParam("file") MultipartFile file) {
         try {
             PurchaseImportResult result = talentPurchaseImportService.importFromExcel(file);

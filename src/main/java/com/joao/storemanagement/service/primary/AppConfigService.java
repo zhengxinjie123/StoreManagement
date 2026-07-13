@@ -23,4 +23,6 @@ public interface AppConfigService {
     Integer getInteger(String key, Integer defaultValue);
 
     BigDecimal getBigDecimal(String key, BigDecimal defaultValue);
+
+    void reseedDefaults();
 }

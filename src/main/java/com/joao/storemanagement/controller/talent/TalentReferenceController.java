@@ -1,7 +1,9 @@
 package com.joao.storemanagement.controller.talent;
 
 import com.joao.storemanagement.dto.response.ApiResponse;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
+import com.joao.storemanagement.security.RequirePermission;
+import com.joao.storemanagement.security.SystemPermission;
 import com.joao.storemanagement.service.talent.TalentOposDataSourceService;
 import com.joao.storemanagement.vo.talent.TalentReferenceOptionVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +22,7 @@ import java.util.Map;
 @Validated
 @RestController
 @RequestMapping("/api/talentOpos/reference")
+@RequirePermission(SystemPermission.INVOICE_READ)
 @RequiredArgsConstructor
 @Tag(name = "TALENTOPOS参考数据", description = "系统参数配置下拉选项")
 public class TalentReferenceController {

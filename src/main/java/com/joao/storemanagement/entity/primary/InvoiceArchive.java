@@ -55,6 +55,9 @@ public class InvoiceArchive {
     @TableField("total_amount")
     private BigDecimal totalAmount;
 
+    @TableField("filtered_amount")
+    private BigDecimal filteredAmount;
+
     @TableField("tax_included")
     private Boolean taxIncluded;
 

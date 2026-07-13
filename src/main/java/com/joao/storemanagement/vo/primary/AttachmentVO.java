@@ -31,6 +31,7 @@ public class AttachmentVO {
     private final CleanStatus cleanStatus;
     private final Integer cleanStatusCode;
     private final String cleanStatusName;
+    private final String lastImportError;
     private final boolean deletable;
 
     public static AttachmentVO of(ImportAttachment attachment, Supplier supplier) {
@@ -55,6 +56,7 @@ public class AttachmentVO {
                 .cleanStatus(cleanStatus)
                 .cleanStatusCode(cleanStatus.getCode())
                 .cleanStatusName(cleanStatus.getDescription())
+                .lastImportError(attachment.getLastImportError())
                 .deletable(!ImportStatus.SUCCESS.equals(status))
                 .build();
     }

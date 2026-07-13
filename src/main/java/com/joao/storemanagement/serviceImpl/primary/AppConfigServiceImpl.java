@@ -4,7 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.joao.storemanagement.dto.primary.AppConfigDTO;
 import com.joao.storemanagement.entity.primary.AppConfig;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
 import com.joao.storemanagement.mapper.primary.AppConfigMapper;
 import com.joao.storemanagement.service.primary.AppConfigService;
 import com.joao.storemanagement.vo.primary.AppConfigVO;
@@ -31,6 +31,11 @@ public class AppConfigServiceImpl implements AppConfigService {
 
     @PostConstruct
     public void seedDefaults() {
+        reseedDefaults();
+    }
+
+    @Override
+    public void reseedDefaults() {
         try {
             for (DefaultGroup group : defaultGroups()) {
                 AppConfig groupEntity = ensureGroup(group);
@@ -285,6 +290,16 @@ public class AppConfigServiceImpl implements AppConfigService {
                         item("purchase.foreign-supplier-type-guid", "25AFFF2D-A59A-4582-B98E-BE545DB916A5", "STRING", "外文供应商类型 GUID", 60),
                         item("purchase.chinese-supplier-iso-country-code", "CN", "STRING", "中文供应商国家", 70),
                         item("purchase.foreign-supplier-iso-country-code", "PT", "STRING", "外文供应商国家", 80)
+                )),
+                new DefaultGroup("email", "邮箱配置", "从邮箱读取电子发票附件", 80, List.of(
+                        item("email.enabled", "false", "BOOLEAN", "是否启用", 10),
+                        item("email.host", "", "STRING", "IMAP 服务器", 20),
+                        item("email.port", "993", "INTEGER", "IMAP 端口", 30),
+                        item("email.username", "", "STRING", "邮箱账号", 40),
+                        item("email.password", "", "PASSWORD", "邮箱密码/授权码", 50),
+                        item("email.use-ssl", "true", "BOOLEAN", "启用 SSL", 60),
+                        item("email.allowed-extensions", "xls,xlsx,pdf", "STRING", "允许附件扩展名", 70),
+                        item("email.storage-dir", "uploads/email-inbox", "STRING", "邮箱附件缓存目录", 80)
                 ))
         );
     }

@@ -1,12 +1,15 @@
 package com.joao.storemanagement.service.primary;
 
+import com.joao.storemanagement.dto.primary.BatchArchiveDownloadDTO;
+import com.joao.storemanagement.enums.AttachmentOwner;
+import com.joao.storemanagement.enums.ImportStatus;
 import com.joao.storemanagement.vo.primary.InvoiceArchiveSupplierVO;
 import com.joao.storemanagement.vo.primary.InvoiceArchiveVO;
 import com.joao.storemanagement.vo.primary.InvoiceCleanSummaryVO;
 import com.joao.storemanagement.vo.primary.DownloadFileVO;
 import com.joao.storemanagement.vo.response.PageResponseVO;
-
 import java.nio.file.Path;
+import java.time.LocalDate;
 
 /**
  * 清洗归档服务。
@@ -16,31 +19,36 @@ public interface InvoiceArchiveService {
     /**
      * 分页查询归档文件。
      */
-    PageResponseVO<InvoiceArchiveVO> page(long current, long pageSize, String supplierGuid);
+    PageResponseVO<InvoiceArchiveVO> page(
+            long current,
+            long pageSize,
+            String supplierGuid,
+            AttachmentOwner ownerType,
+            ImportStatus importStatus,
+            LocalDate fromDate,
+            LocalDate toDate);
 
-    /**
-     * 分页查询有归档的供应商。
-     */
-    PageResponseVO<InvoiceArchiveSupplierVO> pageSuppliers(long current, long pageSize, String keyword);
+    PageResponseVO<InvoiceArchiveSupplierVO> pageSuppliers(
+            long current,
+            long pageSize,
+            String keyword,
+            AttachmentOwner ownerType,
+            ImportStatus importStatus);
 
-    /**
-     * 获取归档文件下载信息。
-     */
     DownloadFileVO getDownloadFile(String uuid);
 
-    /**
-     * 删除归档文件。
-     */
     void delete(String uuid);
 
-    /**
-     * 按附件删除关联归档。
-     */
     void deleteByFileId(String attachmentUuid);
 
-    /**
-     * 注册清洗归档。
-     */
     InvoiceArchiveVO register(String attachmentUuid, String supplierGuid, Path sourceFile,
-                              String extensionName, int rowCount, InvoiceCleanSummaryVO summary);
+                            String extensionName, int rowCount, InvoiceCleanSummaryVO summary);
+
+    /**
+     * 批量下载归档发票 ZIP。
+     *
+     * @param request 归档 UUID 列表
+     * @return ZIP 字节内容
+     */
+    byte[] batchDownloadZip(BatchArchiveDownloadDTO request);
 }

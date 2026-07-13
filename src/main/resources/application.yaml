@@ -28,5 +28,11 @@ logging:
     com.baomidou.mybatisplus: debug
 
 mybatis-plus:
+  mapper-locations: classpath:/mapper/primary/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
+
+store:
+  database:
+    backup-dir: backups/db
+    reset-target-name: Store_Management

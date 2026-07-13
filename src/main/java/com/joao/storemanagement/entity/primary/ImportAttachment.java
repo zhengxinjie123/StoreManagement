@@ -49,4 +49,6 @@ public class ImportAttachment {
     @TableField("clean_status")
     private CleanStatus cleanStatus;
 
+    @TableField("last_import_error")
+    private String lastImportError;
 }

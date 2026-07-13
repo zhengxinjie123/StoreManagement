@@ -75,7 +75,5 @@ public class InvoiceTemplateDTO {
 
     private String footerSummaryMode;
 
-    private Boolean enabled;
-
     private String remark;
 }

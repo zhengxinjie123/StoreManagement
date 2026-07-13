@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.mapper.primary.replenish.ReplenishRecordMapper">
+
+    <resultMap id="ReplenishRecordMap" type="com.joao.storemanagement.entity.replenish.ReplenishRecord">
+        <id property="id" column="id"/>
+        <result property="barcode" column="barcode"/>
+        <result property="nameChinese" column="name_chinese"/>
+        <result property="nameForeign" column="name_foreign"/>
+        <result property="supplierName" column="supplier_name"/>
+        <result property="inventoryQty" column="inventory_qty"/>
+        <result property="remark" column="remark"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="selectPendingOrdered" resultMap="ReplenishRecordMap">
+        SELECT id, barcode, name_chinese, name_foreign, supplier_name, inventory_qty,
+               remark, status, created_at, updated_at
+        FROM replenish_records
+        WHERE status = N'pending'
+        ORDER BY supplier_name ASC, created_at ASC, id ASC
+    </select>
+
+    <select id="selectCompletedOrdered" resultMap="ReplenishRecordMap">
+        SELECT id, barcode, name_chinese, name_foreign, supplier_name, inventory_qty,
+               remark, status, created_at, updated_at
+        FROM replenish_records
+        WHERE status = N'done'
+        ORDER BY updated_at DESC, id DESC
+    </select>
+
+    <sql id="pageWhere">
+        <where>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="barcode != null and barcode != ''">
+                AND barcode LIKE '%' + #{barcode} + '%'
+            </if>
+            <if test="supplierName != null and supplierName != ''">
+                AND supplier_name LIKE '%' + #{supplierName} + '%'
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    name_chinese LIKE '%' + #{keyword} + '%'
+                    OR name_foreign LIKE '%' + #{keyword} + '%'
+                )
+            </if>
+        </where>
+    </sql>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(1) FROM replenish_records
+        <include refid="pageWhere"/>
+    </select>
+
+    <select id="selectPage" resultMap="ReplenishRecordMap">
+        SELECT id, barcode, name_chinese, name_foreign, supplier_name, inventory_qty,
+               remark, status, created_at, updated_at
+        FROM replenish_records
+        <include refid="pageWhere"/>
+        ORDER BY
+            CASE WHEN status = N'pending' THEN 0 ELSE 1 END,
+            supplier_name ASC,
+            created_at DESC,
+            id DESC
+        OFFSET #{offset} ROWS FETCH NEXT #{pageSize} ROWS ONLY
+    </select>
+
+    <select id="selectPendingByBarcode" resultMap="ReplenishRecordMap">
+        SELECT TOP 1 id, barcode, name_chinese, name_foreign, supplier_name, inventory_qty,
+               remark, status, created_at, updated_at
+        FROM replenish_records
+        WHERE status = N'pending' AND barcode = #{barcode}
+        ORDER BY id ASC
+    </select>
+
+    <select id="selectById" resultMap="ReplenishRecordMap">
+        SELECT id, barcode, name_chinese, name_foreign, supplier_name, inventory_qty,
+               remark, status, created_at, updated_at
+        FROM replenish_records
+        WHERE id = #{id}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO replenish_records (
+            barcode, name_chinese, name_foreign, supplier_name, inventory_qty, remark, status
+        ) VALUES (
+            #{barcode}, #{nameChinese}, #{nameForeign}, #{supplierName}, #{inventoryQty}, #{remark}, #{status}
+        )
+    </insert>
+
+    <update id="updateStatusIfCurrent">
+        UPDATE replenish_records
+        SET status = #{newStatus}, updated_at = SYSUTCDATETIME()
+        WHERE id = #{id} AND status = #{currentStatus}
+    </update>
+
+    <update id="updateRemark">
+        UPDATE replenish_records
+        SET remark = #{remark}, updated_at = SYSUTCDATETIME()
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM replenish_records WHERE id = #{id}
+    </delete>
+</mapper>

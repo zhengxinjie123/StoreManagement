@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.mapper.primary.pricing.RetailPriceSyncRunMapper">
+
+    <resultMap id="RetailPriceSyncRunMap" type="com.joao.storemanagement.entity.pricing.RetailPriceSyncRun">
+        <id property="id" column="id"/>
+        <result property="matchedCount" column="matched_count"/>
+        <result property="appliedCount" column="applied_count"/>
+        <result property="skippedCount" column="skipped_count"/>
+        <result property="remark" column="remark"/>
+        <result property="rollbackOfRunId" column="rollback_of_run_id"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO retail_price_sync_runs (matched_count, applied_count, skipped_count, remark, rollback_of_run_id)
+        VALUES (#{matchedCount}, #{appliedCount}, #{skippedCount}, #{remark}, #{rollbackOfRunId})
+    </insert>
+
+    <select id="selectById" resultMap="RetailPriceSyncRunMap">
+        SELECT id, matched_count, applied_count, skipped_count, remark, rollback_of_run_id, created_at
+        FROM retail_price_sync_runs
+        WHERE id = #{id}
+    </select>
+
+    <select id="countAll" resultType="long">
+        SELECT COUNT(1) FROM retail_price_sync_runs
+    </select>
+
+    <select id="countRollbackBySourceRunId" resultType="long">
+        SELECT COUNT(1) FROM retail_price_sync_runs WHERE rollback_of_run_id = #{runId}
+    </select>
+
+    <select id="selectPage" resultMap="RetailPriceSyncRunMap">
+        SELECT id, matched_count, applied_count, skipped_count, remark, rollback_of_run_id, created_at
+        FROM retail_price_sync_runs
+        ORDER BY created_at DESC, id DESC
+        OFFSET #{offset} ROWS FETCH NEXT #{pageSize} ROWS ONLY
+    </select>
+</mapper>

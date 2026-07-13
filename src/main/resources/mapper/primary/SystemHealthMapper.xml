@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.mapper.primary.SystemHealthMapper">
+
+    <select id="selectRecentApiErrors" resultType="com.joao.storemanagement.dto.system.RecentApiErrorDTO">
+        SELECT TOP 20
+            username,
+            action_type AS actionType,
+            description,
+            request_uri AS requestUri,
+            status_code AS statusCode,
+            created_at AS createdAt
+        FROM operation_logs
+        WHERE status_code &gt;= 400
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="selectRecentImportFailures" resultType="com.joao.storemanagement.dto.system.RecentImportFailureDTO">
+        SELECT TOP 20
+            uuid,
+            file_name AS fileName,
+            supplier_guid AS supplierGuid,
+            last_import_error AS lastImportError,
+            upload_date AS uploadDate
+        FROM import_attachments
+        WHERE import_status = 0
+        ORDER BY upload_date DESC
+    </select>
+
+    <select id="selectRecentSyncIssues" resultType="com.joao.storemanagement.dto.system.RecentSyncIssueDTO">
+        SELECT TOP 20
+            id AS runId,
+            matched_count AS matchedCount,
+            applied_count AS appliedCount,
+            skipped_count AS skippedCount,
+            rollback_of_run_id AS rollbackOfRunId,
+            remark,
+            created_at AS createdAt
+        FROM retail_price_sync_runs
+        WHERE skipped_count &gt; 0
+           OR rollback_of_run_id IS NOT NULL
+           OR applied_count = 0
+        ORDER BY created_at DESC
+    </select>
+</mapper>

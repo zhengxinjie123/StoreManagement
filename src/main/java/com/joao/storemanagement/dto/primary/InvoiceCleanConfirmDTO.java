@@ -44,6 +44,8 @@ public class InvoiceCleanConfirmDTO {
         private BigDecimal discountAmount;
         private BigDecimal totalAmount;
         private Boolean taxIncluded;
+        private Integer filteredCount;
+        private BigDecimal filteredAmount;
         private String remark;
     }
 }

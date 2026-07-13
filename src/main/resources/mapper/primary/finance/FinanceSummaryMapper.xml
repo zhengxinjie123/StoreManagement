@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.mapper.primary.finance.FinanceSummaryMapper">
+
+    <select id="sumRevenueForRange" resultType="java.math.BigDecimal">
+        SELECT ISNULL(SUM(amount), 0)
+        FROM revenue_entries
+        WHERE entry_date BETWEEN #{fromDate} AND #{toDate}
+    </select>
+
+    <select id="sumExpenseForRange" resultType="java.math.BigDecimal">
+        SELECT ISNULL(SUM(amount), 0)
+        FROM expense_entries
+        WHERE entry_date BETWEEN #{fromDate} AND #{toDate}
+    </select>
+
+    <select id="sumOperatingExpenseForRange" resultType="java.math.BigDecimal">
+        SELECT ISNULL(SUM(amount), 0)
+        FROM expense_entries
+        WHERE entry_date BETWEEN #{fromDate} AND #{toDate}
+          AND is_proxy_payment = 0
+          AND (category IS NULL OR category &lt;&gt; N'货款')
+    </select>
+
+    <select id="sumManualSupplierExpenseForRange" resultType="java.math.BigDecimal">
+        SELECT ISNULL(SUM(amount), 0)
+        FROM expense_entries
+        WHERE entry_date BETWEEN #{fromDate} AND #{toDate}
+          AND category = N'货款'
+    </select>
+
+    <select id="sumOtherExpenseForRange" resultType="java.math.BigDecimal">
+        SELECT ISNULL(SUM(amount), 0)
+        FROM expense_entries
+        WHERE entry_date BETWEEN #{fromDate} AND #{toDate}
+          AND is_proxy_payment = 1
+    </select>
+
+    <select id="sumPaidSupplierPaymentForRange" resultType="java.math.BigDecimal">
+        SELECT ISNULL(SUM(amount), 0)
+        FROM supplier_payment_pending
+        WHERE status = N'paid'
+          AND paid_date IS NOT NULL
+          AND paid_date BETWEEN #{fromDate} AND #{toDate}
+    </select>
+
+    <select id="selectMonthlySummary"
+            resultType="com.joao.storemanagement.dto.finance.ProfitMonthlyItemDTO">
+        WITH months AS (
+            SELECT 1 AS monthNum UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8
+            UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12
+        ),
+        revenue_monthly AS (
+            SELECT MONTH(entry_date) AS monthNum, ISNULL(SUM(amount), 0) AS amount
+            FROM revenue_entries
+            WHERE YEAR(entry_date) = #{year}
+            GROUP BY MONTH(entry_date)
+        ),
+        operating_monthly AS (
+            SELECT MONTH(entry_date) AS monthNum, ISNULL(SUM(amount), 0) AS amount
+            FROM expense_entries
+            WHERE YEAR(entry_date) = #{year}
+              AND is_proxy_payment = 0
+              AND (category IS NULL OR category &lt;&gt; N'货款')
+            GROUP BY MONTH(entry_date)
+        ),
+        manual_supplier_monthly AS (
+            SELECT MONTH(entry_date) AS monthNum, ISNULL(SUM(amount), 0) AS amount
+            FROM expense_entries
+            WHERE YEAR(entry_date) = #{year}
+              AND category = N'货款'
+            GROUP BY MONTH(entry_date)
+        ),
+        other_monthly AS (
+            SELECT MONTH(entry_date) AS monthNum, ISNULL(SUM(amount), 0) AS amount
+            FROM expense_entries
+            WHERE YEAR(entry_date) = #{year}
+              AND is_proxy_payment = 1
+            GROUP BY MONTH(entry_date)
+        ),
+        supplier_monthly AS (
+            SELECT monthNum, ISNULL(SUM(amount), 0) AS amount
+            FROM (
+                SELECT MONTH(paid_date) AS monthNum, amount
+                FROM supplier_payment_pending
+                WHERE status = N'paid'
+                  AND paid_date IS NOT NULL
+                  AND YEAR(paid_date) = #{year}
+                UNION ALL
+                SELECT MONTH(entry_date) AS monthNum, amount
+                FROM expense_entries
+                WHERE category = N'货款'
+                  AND YEAR(entry_date) = #{year}
+            ) supplier_rows
+            GROUP BY monthNum
+        )
+        SELECT
+            #{year} AS year,
+            m.monthNum AS month,
+            ISNULL(r.amount, 0) AS totalRevenue,
+            ISNULL(o.amount, 0) AS operatingExpense,
+            ISNULL(s.amount, 0) AS supplierPaymentExpense,
+            ISNULL(t.amount, 0) AS otherExpense,
+            ISNULL(r.amount, 0) - ISNULL(o.amount, 0) - ISNULL(s.amount, 0) - ISNULL(t.amount, 0) AS netProfit
+        FROM months m
+        LEFT JOIN revenue_monthly r ON r.monthNum = m.monthNum
+        LEFT JOIN operating_monthly o ON o.monthNum = m.monthNum
+        LEFT JOIN supplier_monthly s ON s.monthNum = m.monthNum
+        LEFT JOIN other_monthly t ON t.monthNum = m.monthNum
+        ORDER BY m.monthNum
+    </select>
+</mapper>

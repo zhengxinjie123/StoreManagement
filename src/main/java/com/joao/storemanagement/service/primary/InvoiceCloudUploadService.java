@@ -5,4 +5,6 @@ import com.joao.storemanagement.vo.primary.InvoiceArchiveVO;
 public interface InvoiceCloudUploadService {
 
     InvoiceArchiveVO uploadArchiveToGoogleDrive(String attachmentUuid);
+
+    InvoiceArchiveVO uploadArchiveByUuid(String archiveUuid);
 }

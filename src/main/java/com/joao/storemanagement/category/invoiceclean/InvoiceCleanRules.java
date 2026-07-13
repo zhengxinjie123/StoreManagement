@@ -154,8 +154,8 @@ public final class InvoiceCleanRules {
             InvoiceCleanRow row = new InvoiceCleanRow();
             row.setSourceRowIndex(rowIndex + 1);
             row.setBarcode(StrUtil.trim(barcode));
-            row.setChineseName(nameParts.chinese());
-            row.setForeignName(nameParts.foreignName());
+            row.setChineseName(InvoiceCleanSupport.normalizeProductName(nameParts.chinese()));
+            row.setForeignName(InvoiceCleanSupport.normalizeProductName(nameParts.foreignName()));
             row.setQuantity(quantity);
             row.setUnitPriceExTax(unitPriceExTax);
             row.setUnitPriceIncTax(unitPriceIncTax);
@@ -193,7 +193,7 @@ public final class InvoiceCleanRules {
             // 从同一列文本中拆分中文与外文片段
             return splitMixedName(rawName);
         }
-        return new InvoiceCleanSupport.NameParts("", StrUtil.trim(rawName));
+        return new InvoiceCleanSupport.NameParts("", InvoiceCleanSupport.normalizeProductName(StrUtil.trim(rawName)));
     }
 
     /**
@@ -241,8 +241,8 @@ public final class InvoiceCleanRules {
         return InvoiceFilteredRow.builder()
                 .sourceRowIndex(rowIndex + 1)
                 .barcode(barcode)
-                .chineseName(nameParts.chinese())
-                .foreignName(nameParts.foreignName())
+                .chineseName(InvoiceCleanSupport.normalizeProductName(nameParts.chinese()))
+                .foreignName(InvoiceCleanSupport.normalizeProductName(nameParts.foreignName()))
                 .quantity(quantity)
                 .outputPrice(outputPrice)
                 .taxRate(taxRate)

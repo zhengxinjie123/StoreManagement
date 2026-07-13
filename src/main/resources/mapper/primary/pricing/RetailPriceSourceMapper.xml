@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.joao.storemanagement.mapper.primary.pricing.RetailPriceSourceMapper">
+
+    <resultMap id="RetailPriceSourceMap" type="com.joao.storemanagement.entity.pricing.RetailPriceSource">
+        <id property="id" column="id"/>
+        <result property="code" column="code"/>
+        <result property="name" column="name"/>
+        <result property="priority" column="priority"/>
+        <result property="remark" column="remark"/>
+        <result property="active" column="active"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="selectAllActiveOrdered" resultMap="RetailPriceSourceMap">
+        SELECT id, code, name, priority, remark, active, created_at, updated_at
+        FROM retail_price_sources
+        WHERE active = 1
+        ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="selectAll" resultMap="RetailPriceSourceMap">
+        SELECT id, code, name, priority, remark, active, created_at, updated_at
+        FROM retail_price_sources
+        ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="selectById" resultMap="RetailPriceSourceMap">
+        SELECT id, code, name, priority, remark, active, created_at, updated_at
+        FROM retail_price_sources WHERE id = #{id}
+    </select>
+
+    <select id="selectByCode" resultMap="RetailPriceSourceMap">
+        SELECT id, code, name, priority, remark, active, created_at, updated_at
+        FROM retail_price_sources WHERE code = #{code}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO retail_price_sources (code, name, priority, remark, active)
+        VALUES (#{code}, #{name}, #{priority}, #{remark}, #{active})
+    </insert>
+
+    <update id="update">
+        UPDATE retail_price_sources
+        SET code = #{code},
+            name = #{name},
+            priority = #{priority},
+            remark = #{remark},
+            active = #{active},
+            updated_at = SYSUTCDATETIME()
+        WHERE id = #{id}
+    </update>
+</mapper>

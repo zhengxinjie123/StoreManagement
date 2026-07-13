@@ -8,7 +8,7 @@ import com.joao.storemanagement.category.invoiceclean.FooterSummaryMode;
 import com.joao.storemanagement.config.StoreProperties;
 import com.joao.storemanagement.dto.primary.InvoiceTemplateDTO;
 import com.joao.storemanagement.entity.primary.InvoiceTemplate;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
 import com.joao.storemanagement.mapper.primary.InvoiceTemplateMapper;
 import com.joao.storemanagement.service.primary.InvoiceTemplateService;
 import com.joao.storemanagement.service.talent.TalentOposDataSourceService;
@@ -33,7 +33,8 @@ public class InvoiceTemplateServiceImpl implements InvoiceTemplateService {
     private final StoreProperties storeProperties;
 
     @Override
-    public PageResponseVO<InvoiceTemplateVO> page(long current, long pageSize, String supplierGuid) {
+    public PageResponseVO<InvoiceTemplateVO> page(
+            long current, long pageSize, String supplierGuid) {
         LambdaQueryWrapper<InvoiceTemplate> query = Wrappers.lambdaQuery(InvoiceTemplate.class)
                 .eq(StrUtil.isNotBlank(supplierGuid), InvoiceTemplate::getSupplierGuid, supplierGuid)
                 .orderByDesc(InvoiceTemplate::getUpdatedAt);
@@ -111,6 +112,53 @@ public class InvoiceTemplateServiceImpl implements InvoiceTemplateService {
         if (invoiceTemplateMapper.deleteById(id) == 0) {
             throw new BusinessException("模板不存在: " + id);
         }
+    }
+
+    @Override
+    public InvoiceTemplateVO copy(Long id) {
+        InvoiceTemplate source = requireTemplate(id);
+        LocalDateTime now = LocalDateTime.now();
+        InvoiceTemplate copy = InvoiceTemplate.builder()
+                .supplierGuid(source.getSupplierGuid())
+                .name(source.getName() + " (副本)")
+                .headerRow(source.getHeaderRow())
+                .dataStartRow(source.getDataStartRow())
+                .sheetName(source.getSheetName())
+                .barcodeCol(source.getBarcodeCol())
+                .newBarcodeCol(source.getNewBarcodeCol())
+                .foreignNameCol(source.getForeignNameCol())
+                .chineseNameCol(source.getChineseNameCol())
+                .quantityCol(source.getQuantityCol())
+                .priceCol(source.getPriceCol())
+                .priceTaxIncludedCol(source.getPriceTaxIncludedCol())
+                .taxRateCol(source.getTaxRateCol())
+                .lineSubtotalCol(source.getLineSubtotalCol())
+                .defaultTaxRate(source.getDefaultTaxRate())
+                .taxIncluded(source.getTaxIncluded())
+                .filterRowsWithoutBarcode(source.getFilterRowsWithoutBarcode())
+                .splitMixedChineseForeignName(source.getSplitMixedChineseForeignName())
+                .stripCurrencyFromPrice(source.getStripCurrencyFromPrice())
+                .skipZeroPricePalletRows(source.getSkipZeroPricePalletRows())
+                .breakOnTaxableBase(source.getBreakOnTaxableBase())
+                .productHasNewBarcode(source.getProductHasNewBarcode())
+                .skipBarcodeNotEAN13(source.getSkipBarcodeNotEAN13())
+                .footerSummaryMode(source.getFooterSummaryMode())
+                .remark(source.getRemark())
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+        invoiceTemplateMapper.insert(copy);
+        return InvoiceTemplateVO.of(copy);
+    }
+
+    @Override
+    public void touchLastUsed(Long id) {
+        InvoiceTemplate entity = invoiceTemplateMapper.selectById(id);
+        if (entity == null) {
+            return;
+        }
+        entity.setLastUsedAt(LocalDateTime.now());
+        invoiceTemplateMapper.updateById(entity);
     }
 
     private void requireTemplateId(Long id) {

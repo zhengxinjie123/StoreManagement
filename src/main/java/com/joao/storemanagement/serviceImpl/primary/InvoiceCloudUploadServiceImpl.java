@@ -8,7 +8,7 @@ import com.joao.storemanagement.config.StoreProperties;
 import com.joao.storemanagement.entity.primary.ImportAttachment;
 import com.joao.storemanagement.entity.primary.InvoiceArchive;
 import com.joao.storemanagement.enums.AttachmentOwner;
-import com.joao.storemanagement.exceptions.BusinessException;
+import com.joao.storemanagement.exception.BusinessException;
 import com.joao.storemanagement.mapper.primary.ImportAttachmentMapper;
 import com.joao.storemanagement.mapper.primary.InvoiceArchiveMapper;
 import com.joao.storemanagement.service.primary.ImportAttachmentService;
@@ -48,8 +48,8 @@ public class InvoiceCloudUploadServiceImpl implements InvoiceCloudUploadService 
     private final InvoiceArchiveMapper invoiceArchiveMapper;
     private final ImportAttachmentService importAttachmentService;
     private final StoreProperties storeProperties;
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     @Override
     public InvoiceArchiveVO uploadArchiveToGoogleDrive(String attachmentUuid) {
@@ -64,7 +64,21 @@ public class InvoiceCloudUploadServiceImpl implements InvoiceCloudUploadService 
         String cloudFileName = cloudArchiveFileName(archive);
         uploadFile(archivePath, cloudFileName);
         importAttachmentService.markImported(attachment.getUuid());
-        return InvoiceArchiveVO.of(archive, false, attachment.getOwnerType());
+        return InvoiceArchiveVO.of(archive, false, attachment);
+    }
+
+    @Override
+    public InvoiceArchiveVO uploadArchiveByUuid(String archiveUuid) {
+        InvoiceArchive archive = requireArchiveByUuid(archiveUuid);
+        return uploadArchiveToGoogleDrive(archive.getAttachmentUuid());
+    }
+
+    private InvoiceArchive requireArchiveByUuid(String archiveUuid) {
+        InvoiceArchive archive = invoiceArchiveMapper.selectById(GuidHelper.normalize(archiveUuid));
+        if (archive == null) {
+            throw new BusinessException("归档发票不存在: " + archiveUuid);
+        }
+        return archive;
     }
 
     private ImportAttachment requireParentAttachment(String attachmentUuid) {
@@ -115,9 +129,9 @@ public class InvoiceCloudUploadServiceImpl implements InvoiceCloudUploadService 
                     new HttpEntity<>(multipartBody(path, cloudFileName, folderId, boundary), headers),
                     Map.class);
         } catch (IOException ex) {
-            throw new BusinessException("读取 Google Drive token 或归档文件失败: " + ex.getMessage(), ex);
-        } catch (Exception ex) {
-            throw new BusinessException("上传谷歌云端失败: " + ex.getMessage(), ex);
+            throw new BusinessException("读取 Google Drive token 或归档文件失败", ex);
+        } catch (RestClientResponseException ex) {
+            throw new BusinessException("上传谷歌云端失败", ex);
         }
     }
 
@@ -257,8 +271,9 @@ public class InvoiceCloudUploadServiceImpl implements InvoiceCloudUploadService 
     }
 
     private String cloudArchiveFileName(InvoiceArchive archive) {
-        return archive.getFileName()
+        String fileName = archive.getFileName()
                 .replace(" [父母]", "")
-                + "." + archive.getExtensionName();
+                .replace(" [自己]", "");
+        return fileName + "." + archive.getExtensionName();
     }
 }

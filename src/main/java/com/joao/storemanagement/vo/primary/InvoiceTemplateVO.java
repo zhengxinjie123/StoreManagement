@@ -38,6 +38,7 @@ public class InvoiceTemplateVO {
     private final String footerSummaryMode;
     private final String footerSummaryModeName;
     private final String remark;
+    private final LocalDateTime lastUsedAt;
     private final LocalDateTime createdAt;
     private final LocalDateTime updatedAt;
 
@@ -74,6 +75,7 @@ public class InvoiceTemplateVO {
                         ? "不解析"
                         : entity.getFooterSummaryMode().getDescription())
                 .remark(entity.getRemark())
+                .lastUsedAt(entity.getLastUsedAt())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
